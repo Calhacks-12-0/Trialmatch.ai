@@ -30,15 +30,15 @@ class TrialMatchIntegrationService:
         
         # Step 1: Load and prepare data
         logger.info("Step 1: Loading clinical data...")
-        data = self.data_loader.prepare_for_conway()
+        data = self.data_loader.prepare_for_conway(use_synthea=True, max_patients=5000)
         
         # Step 2: Conway pattern discovery (unsupervised)
         logger.info("Step 2: Running Conway pattern discovery...")
         embeddings = self.conway_engine.create_universal_embedding(data)
         pattern_results = self.conway_engine.discover_patterns(embeddings)
         
-        # Step 3: Get pattern insights
-        insights = self.conway_engine.get_pattern_insights()
+        # Step 3: Get pattern insights with actual patient data
+        insights = self.conway_engine.get_pattern_insights(patient_data=data['patients'])
         
         # Step 4: Match patterns to specific trial
         if trial_id:
