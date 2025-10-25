@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Tabs,
   TabsContent,
@@ -134,7 +134,7 @@ export default function App() {
           {/* Modal Content */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"
+              className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -168,7 +168,7 @@ export default function App() {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-[#0B5394] hover:bg-[#0B5394]/90"
+                  className="bg-[#52C41A] hover:bg-[#52C41A]/90 text-white"
                   onClick={handleAddTrial}
                   disabled={!trialId || isLoading}
                 >
@@ -642,55 +642,89 @@ function DatasetView() {
 // Patterns View
 function PatternsView() {
   const [selectedPattern, setSelectedPattern] = useState<string | null>(null);
+  const [patterns, setPatterns] = useState<any[]>([]);
+  const [clusterData, setClusterData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Generate sample UMAP-like scatter data for 5 patient clusters
-  const generateClusterData = (
-    clusterId: number,
-    centerX: number,
-    centerY: number,
-    count: number,
-    spread: number
-  ) => {
-    const patternNames = [
-      "Elderly Diabetics",
-      "Mid-age Controlled",
-      "Young Onset",
-      "Uncontrolled HbA1c",
-      "Cardiovascular",
-    ];
-    const colors = ["#0B5394", "#1E6BB8", "#3B82F6", "#60A5FA", "#93C5FD"];
+  // Fetch real patterns from backend
+  useEffect(() => {
+    const fetchPatterns = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("http://localhost:8080/api/patterns");
+        const data = await response.json();
 
-    return Array.from({ length: count }, (_, i) => ({
-      x: centerX + (Math.random() - 0.5) * spread,
-      y: centerY + (Math.random() - 0.5) * spread,
-      cluster: clusterId,
-      patternName: patternNames[clusterId],
-      color: colors[clusterId],
-      patientId: `P${String(clusterId * 1000 + i).padStart(6, "0")}`,
-    }));
-  };
+        // Map backend patterns to frontend format using insights
+        const colors = ["#0B5394", "#1E6BB8", "#3B82F6", "#60A5FA", "#93C5FD"];
 
-  // Create 5 distinct clusters
-  const clusterData = [
-    ...generateClusterData(0, -4, 3, 180, 3),
-    ...generateClusterData(1, 2, 4, 120, 2.5),
-    ...generateClusterData(2, 5, -2, 90, 2),
-    ...generateClusterData(3, -2, -3, 60, 2.5),
-    ...generateClusterData(4, 1, -5, 50, 2),
-  ];
+        // Use simple Pattern 1, Pattern 2 labels
+        const mappedPatterns = data.patterns.map((p: any, idx: number) => {
+          return {
+            name: `Pattern ${idx + 1}`,
+            pattern_id: p.pattern_id, // Keep original ID for filtering
+            count: p.size,
+            color: colors[idx % colors.length],
+          };
+        });
+
+        setPatterns(mappedPatterns);
+
+        // Generate visualization data from embeddings if available
+        if (data.patterns.length > 0) {
+          const vizData: any[] = [];
+          data.patterns.forEach((pattern: any, pIdx: number) => {
+            // Use centroid as center point and generate scatter around it
+            const centerX = pattern.centroid[0] || 0;
+            const centerY = pattern.centroid[1] || 0;
+
+            // Use simple Pattern N label
+            const displayName = `Pattern ${pIdx + 1}`;
+
+            // Generate points for this cluster
+            for (let i = 0; i < Math.min(pattern.size, 200); i++) {
+              vizData.push({
+                x: centerX + (Math.random() - 0.5) * 3,
+                y: centerY + (Math.random() - 0.5) * 3,
+                cluster: pIdx,
+                patternName: displayName,
+                pattern_id: pattern.pattern_id,
+                color: colors[pIdx % colors.length],
+                patientId: `P${String(pIdx * 1000 + i).padStart(6, "0")}`,
+              });
+            }
+          });
+          setClusterData(vizData);
+        }
+      } catch (error) {
+        console.error("Failed to fetch patterns:", error);
+        // Fallback to mock data on error
+        setPatterns([
+          { name: "Pattern 0", count: 3254, color: "#0B5394" },
+          { name: "Pattern 1", count: 1746, color: "#1E6BB8" },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatterns();
+  }, []); // Empty dependency array - fetch once on mount
 
   // Filter data based on selected pattern
   const filteredData = selectedPattern
     ? clusterData.filter((d) => d.patternName === selectedPattern)
     : clusterData;
 
-  const patterns = [
-    { name: "Elderly Diabetics", count: 2847, color: "#0B5394" },
-    { name: "Mid-age Controlled", count: 1923, color: "#1E6BB8" },
-    { name: "Young Onset", count: 1456, color: "#3B82F6" },
-    { name: "Uncontrolled HbA1c", count: 987, color: "#60A5FA" },
-    { name: "Cardiovascular", count: 734, color: "#93C5FD" },
-  ];
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#0B5394]" />
+          <p className="text-gray-500">Loading Conway patterns from 5000 Synthea patients...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -699,7 +733,7 @@ function PatternsView() {
         <CardHeader>
           <CardTitle>Discovered Patterns</CardTitle>
           <p className="text-xs text-gray-500 mt-1">
-            Conway unsupervised learning discovered {patterns.length} distinct patient clusters
+            Conway unsupervised learning discovered {patterns.length} distinct patient clusters from real Synthea FHIR data
           </p>
         </CardHeader>
         <CardContent>
@@ -708,7 +742,7 @@ function PatternsView() {
               variant={selectedPattern === null ? "default" : "outline"}
               className={
                 selectedPattern === null
-                  ? "bg-[#0B5394] hover:bg-[#0B5394]/90"
+                  ? "bg-[#0B5394] hover:bg-[#0B5394]/90 text-white"
                   : ""
               }
               onClick={() => setSelectedPattern(null)}

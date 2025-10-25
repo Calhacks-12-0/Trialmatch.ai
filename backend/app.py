@@ -106,10 +106,13 @@ async def get_patterns():
     """Get discovered patterns for visualization"""
     if not integration_service.conway_engine.patterns:
         await integration_service.process_trial_matching()
-    
+
+    # Get patient data for insights
+    patient_data = integration_service.data_loader.patients_df.to_dict('records') if integration_service.data_loader.patients_df is not None else None
+
     return {
         'patterns': integration_service.conway_engine.patterns[:10],
-        'insights': integration_service.conway_engine.get_pattern_insights()[:5]
+        'insights': integration_service.conway_engine.get_pattern_insights(patient_data=patient_data)[:10]
     }
 
 @app.get("/api/agents/status")
