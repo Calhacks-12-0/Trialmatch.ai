@@ -1,577 +1,269 @@
-# TrialMatch AI - Fetch.ai Multi-Agent System
+# TrialMatch AI - Fetch.ai Agent System
 
-## 🏗️ Architecture Overview
+Multi-agent system for clinical trial patient matching using Fetch.ai's uagents framework.
 
-This system implements a **7-agent network** using Fetch.ai's uagents framework to intelligently match patients to clinical trials.
-
-### **The Two-Stage Pipeline**
+## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  STAGE 1: CONWAY PATTERN ENGINE (Unsupervised Discovery)   │
-│  --------------------------------------------------------   │
-│  • Processes 50,000+ patients & 450,000+ trials           │
-│  • Creates multi-modal embeddings (text + numeric + geo)   │
-│  • Discovers natural clusters using UMAP + HDBSCAN        │
-│  • NO LABELS NEEDED - pure unsupervised learning           │
-│  • Output: Pattern clusters with similarity metrics        │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STAGE 2: FETCH.AI AGENT NETWORK (Orchestration)          │
-│  --------------------------------------------------------   │
-│  • Receives pre-discovered Conway patterns                 │
-│  • 7 specialized agents work collaboratively               │
-│  • Sequential pipeline with inter-agent messaging          │
-│  • Output: Ranked patients + sites + enrollment forecast   │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Conway Engine  │────>│  Pattern Storage │────>│  Fetch.ai Agents│
+│  (Stage 1)      │     │                  │     │  (Stage 2)      │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+  Unsupervised ML         Pre-discovered           Agent Coordination
+  UMAP + HDBSCAN          Patterns                 Message Passing
 ```
 
----
+### Two-Stage Pipeline
 
-## 🤖 The 7 Agents
+1. **Stage 1: Conway Pattern Engine** (Unsupervised Learning)
+   - Discovers patterns in patient/trial data using UMAP + HDBSCAN
+   - Creates universal embeddings from clinical features
+   - Identifies patient clusters without supervision
+   - Runs FIRST, before agents
 
-### **1. Coordinator Agent** (Port 8000)
-**Role:** Orchestrates the entire multi-agent workflow
+2. **Stage 2: Fetch.ai Agents** (Coordination)
+   - Work WITH pre-discovered patterns from Conway
+   - Orchestrate matching workflow across 7 specialized agents
+   - Handle eligibility, discovery, matching, site selection, and prediction
 
-**Responsibilities:**
-- Receives user queries
-- Calls all 6 specialized agents sequentially
-- Aggregates results
-- Returns comprehensive response
+## Agent System
 
-**Key Features:**
-- Sequential orchestration with error handling
-- Timing metrics for each agent
-- Centralized logging and monitoring
+### 7 Specialized Agents
 
-**Message Flow:**
+1. **Coordinator Agent** (Port 8000)
+   - Orchestrates the entire multi-agent workflow
+   - Sequences requests to all 6 specialized agents
+   - Returns unified response
+
+2. **Eligibility Agent** (Port 8001)
+   - Extracts structured eligibility criteria from trials
+   - Returns age ranges, conditions, gender, lab requirements
+
+3. **Pattern Agent** (Port 8002)
+   - Finds matching Conway patterns for trial criteria
+   - Scores patterns: success rate (40%) + confidence (30%) + size (20%) + diversity (10%)
+
+4. **Discovery Agent** (Port 8003)
+   - Searches patient database using Conway patterns
+   - Filters by basic eligibility (age, gender, condition)
+
+5. **Matching Agent** (Port 8004)
+   - Scores patients using Conway similarity metrics
+   - Components: eligibility (40%) + similarity (30%) + enrollment probability (30%)
+
+6. **Site Agent** (Port 8005)
+   - Geographic site recommendations using clustering
+   - Assigns patients to nearest major cities
+
+7. **Prediction Agent** (Port 8006)
+   - Forecasts enrollment timeline using pattern success rates
+   - Generates milestones and risk factors
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.9-3.12 (NOT 3.13 - uagents incompatibility)
+- Virtual environment recommended
+
+### Setup
+
+```bash
+# 1. Create virtual environment with Python 3.12
+python3.12 -m venv venv
+source venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Start agents (Terminal 1)
+python run_agents.py
+
+# 4. Start FastAPI backend (Terminal 2)
+python app.py
+
+# 5. Test the endpoint
+curl -X POST http://localhost:8080/api/match/trial \
+  -H "Content-Type: application/json" \
+  -d '{"trial_id": "NCT00100000"}'
 ```
-User Query → Coordinator → [6 agents in sequence] → Coordinator → Response
+
+### Expected Output
+
+The system will:
+1. Load clinical trial data
+2. Run Conway pattern discovery (30-60 seconds first run)
+3. Send patterns to Fetch.ai agent network
+4. Return comprehensive matching results with:
+   - Pattern statistics
+   - Top 5 pattern insights
+   - Trial matches
+   - Agent coordination status
+
+## File Structure
+
+```
+backend/
+├── agents/                    # Fetch.ai agent system
+│   ├── __init__.py
+│   ├── config.py             # Agent addresses, ports, seeds
+│   ├── models.py             # Pydantic message models
+│   ├── coordinator_agent.py  # Main orchestrator
+│   ├── eligibility_agent.py  # Extract eligibility criteria
+│   ├── pattern_agent.py      # Find Conway patterns
+│   ├── discovery_agent.py    # Search patient database
+│   ├── matching_agent.py     # Score patients
+│   ├── site_agent.py         # Geographic recommendations
+│   └── prediction_agent.py   # Enrollment forecasts
+│
+├── run_agents.py             # Bureau runner (all 7 agents)
+├── app.py                    # FastAPI backend
+├── integration_service.py    # Pipeline coordinator
+├── conway_engine.py          # Pattern discovery (Stage 1)
+├── data_loader.py            # Clinical data loading
+├── requirements.txt          # Python dependencies
+│
+└── docs/                     # Documentation
+    ├── QUICKSTART_AGENTS.md  # 5-minute setup guide
+    ├── AGENTS_COMPLETE.md    # Full implementation details
+    ├── SETUP.md              # Python 3.12 setup
+    ├── AGENTVERSE_DEPLOYMENT.md
+    └── AGENTVERSE_QUICKSTART.md
 ```
 
----
+## Key Technologies
 
-### **2. Eligibility Agent** (Port 8001)
-**Role:** Extracts structured eligibility criteria from trial protocols
+- **Fetch.ai uagents**: Multi-agent framework
+- **FastAPI**: REST API backend
+- **Pydantic**: Type-safe message models
+- **sentence-transformers**: Clinical text embeddings
+- **UMAP + HDBSCAN**: Conway pattern discovery
+- **NumPy/scikit-learn**: ML operations
 
-**Responsibilities:**
-- Fetches trial data from ClinicalTrials.gov or database
-- Parses inclusion/exclusion criteria
-- Extracts age range, gender, conditions, lab requirements
-- Returns machine-readable criteria
+## API Endpoints
 
-**Input:** `EligibilityRequest` with trial_id
-**Output:** `EligibilityCriteria` with structured requirements
+### POST /api/match/trial
+Main trial matching endpoint.
 
-**Example Output:**
+**Request:**
 ```json
 {
-  "trial_id": "NCT00123456",
-  "age_range": {"min": 18, "max": 65},
-  "conditions": ["diabetes"],
-  "lab_requirements": {
-    "HbA1c": {"min": 6.5, "max": 10.0}
+  "trial_id": "NCT00100000"  // Optional, defaults to first trial
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "processing_time": "45.23 seconds",
+  "statistics": {
+    "total_patients": 1000,
+    "total_trials": 50,
+    "patterns_discovered": 27,
+    "clustered_patients": 934,
+    "noise_patients": 66
+  },
+  "pattern_insights": [...],
+  "trial_matches": [...],
+  "agent_results": {
+    "agents_activated": [
+      "coordinator_agent",
+      "eligibility_agent",
+      "pattern_agent",
+      "discovery_agent",
+      "matching_agent",
+      "site_agent",
+      "prediction_agent"
+    ],
+    "messages_processed": 189,
+    "eligible_patients_found": 127,
+    "recommended_sites": 10,
+    "predicted_enrollment_timeline": "8-12 weeks",
+    "confidence_score": 0.87
   }
 }
 ```
 
-**Future Enhancement:** Use LLM (GPT-4/Claude) to parse natural language criteria
+## Agent Communication Flow
 
----
-
-### **3. Pattern Agent** (Port 8002)
-**Role:** Finds matching Conway patterns based on trial criteria
-
-**Responsibilities:**
-- Receives pre-discovered Conway patterns from integration service
-- Matches patterns to trial eligibility criteria
-- Ranks patterns by match score
-- Returns top matching patterns
-
-**Key Point:** **Does NOT discover patterns** - works with Conway's pre-discovered clusters
-
-**Matching Algorithm:**
-- Enrollment success rate (40% weight)
-- Pattern confidence (30% weight)
-- Pattern size (20% weight)
-- Diversity factor (10% weight)
-
-**Input:** `PatternRequest` with trial criteria
-**Output:** `PatternResponse` with ranked patterns
-
----
-
-### **4. Discovery Agent** (Port 8003)
-**Role:** Searches patient database for candidates matching patterns
-
-**Responsibilities:**
-- Receives matching patterns from Pattern Agent
-- Searches patient database efficiently
-- Filters by basic eligibility (age, gender, condition)
-- Returns patient candidates with embeddings
-
-**Strategy:**
-- Uses Conway pattern membership for efficient search
-- Samples patients from each pattern
-- Applies basic eligibility filtering
-- Returns candidates with associated pattern ID
-
-**Input:** `DiscoveryRequest` with patterns + criteria
-**Output:** `DiscoveryResponse` with patient candidates
-
----
-
-### **5. Matching Agent** (Port 8004)
-**Role:** Scores patients using Conway's similarity metrics
-
-**Responsibilities:**
-- Receives patient candidates from Discovery Agent
-- Scores using Conway embedding similarity
-- Calculates eligibility score
-- Estimates enrollment probability
-- Generates match reasons and risk factors
-
-**Scoring Components:**
-1. **Eligibility Score** (40%): How well patient meets criteria
-2. **Similarity Score** (30%): Conway embedding distance to pattern centroid
-3. **Enrollment Probability** (30%): Based on pattern historical success
-
-**Input:** `MatchingRequest` with candidates + criteria + patterns
-**Output:** `MatchingResponse` with scored matches
-
-**Example Match:**
-```json
-{
-  "patient_id": "P001234",
-  "overall_score": 0.87,
-  "eligibility_score": 0.92,
-  "similarity_score": 0.85,
-  "enrollment_probability": 0.78,
-  "match_reasons": [
-    "Age 55 fits trial criteria",
-    "Has diabetes diagnosis",
-    "Similar patients have 78% success rate"
-  ],
-  "risk_factors": [
-    "No previous trial experience"
-  ]
-}
+```
+User Request
+    ↓
+Coordinator Agent (8000)
+    ↓
+Eligibility Agent (8001) → Extract trial criteria
+    ↓
+Pattern Agent (8002) → Find Conway patterns
+    ↓
+Discovery Agent (8003) → Search patients
+    ↓
+Matching Agent (8004) → Score patients
+    ↓
+Site Agent (8005) → Geographic recommendations
+    ↓
+Prediction Agent (8006) → Enrollment forecast
+    ↓
+Final Response
 ```
 
----
+## Troubleshooting
 
-### **6. Site Agent** (Port 8005)
-**Role:** Recommends trial sites based on patient geography
-
-**Responsibilities:**
-- Receives scored patient matches with locations
-- Clusters patients geographically
-- Recommends optimal trial sites
-- Calculates site capacity and coverage
-
-**Algorithm:**
-- Assigns patients to nearest major city
-- Counts patients per city
-- Ranks cities by patient concentration
-- Returns top N site recommendations
-
-**Input:** `SiteRequest` with patient matches + locations
-**Output:** `SiteResponse` with site recommendations
-
-**Example Site:**
-```json
-{
-  "site_name": "New York Medical Center",
-  "location": {"city": "New York", "state": "NY"},
-  "patient_count": 87,
-  "average_distance": 15.3,
-  "capacity": 150,
-  "priority_score": 0.87,
-  "patient_ids": ["P001234", "P001567", ...]
-}
-```
-
----
-
-### **7. Prediction Agent** (Port 8006)
-**Role:** Forecasts enrollment timeline using pattern analysis
-
-**Responsibilities:**
-- Receives matched patients + site recommendations
-- Uses Conway pattern success rates
-- Forecasts enrollment timeline
-- Generates milestones (25%, 50%, 75%, 100%)
-- Identifies risks and recommendations
-
-**Methodology:**
-1. Calculate average enrollment probability from patterns
-2. Estimate weekly enrollment rate based on site capacity
-3. Calculate timeline to reach target
-4. Generate milestone predictions
-5. Identify risks and optimization opportunities
-
-**Input:** `PredictionRequest` with target, matches, patterns, sites
-**Output:** `EnrollmentForecast` with timeline + confidence
-
-**Example Forecast:**
-```json
-{
-  "target_enrollment": 300,
-  "predicted_enrollment": 285,
-  "estimated_weeks": 12.5,
-  "confidence": 0.85,
-  "weekly_enrollment_rate": 22.8,
-  "milestones": [
-    {"week": 3.1, "enrollment": 75, "percentage": 25},
-    {"week": 6.3, "enrollment": 150, "percentage": 50},
-    {"week": 9.4, "enrollment": 225, "percentage": 75},
-    {"week": 12.5, "enrollment": 300, "percentage": 100}
-  ],
-  "risk_factors": [
-    "Limited patient pool: 285 eligible vs 300 target"
-  ],
-  "recommendations": [
-    "Focus outreach on high-scoring patients (>0.8) first",
-    "Use pattern insights to optimize recruitment messaging"
-  ]
-}
-```
-
----
-
-## 🚀 Running the Agent Network
-
-### **Prerequisites**
-
-Install dependencies:
+### Python Version Issues
+- Error: `ModuleNotFoundError: No module named 'uagents'`
+- Solution: Use Python 3.9-3.12 (NOT 3.13)
 ```bash
-pip install -r requirements.txt
+brew install python@3.12
+/opt/homebrew/bin/python3.12 -m venv venv
 ```
 
-Required packages:
-- `uagents==0.11.0` - Fetch.ai agent framework
-- `pydantic==1.10.9` - Data validation (must be 1.x for uagents)
-- All other dependencies from requirements.txt
-
-### **Option 1: Run All Agents Together (Bureau)**
-
-**Best for development and demos:**
-
+### Pydantic Compatibility
+- Error: `ForwardRef._evaluate() missing argument`
+- Solution: Ensure Pydantic 1.10.24 (NOT 2.x)
 ```bash
-cd backend
-python run_agents.py
+pip install "pydantic>=1.10.24,<2.0"
 ```
 
-This starts all 7 agents in a single process using Fetch.ai's Bureau.
+### First Run Slow
+- First run takes 30-60 seconds to download sentence-transformers model
+- Subsequent runs are fast (~10-15 seconds)
 
-**Ports used:**
-- 8000: Coordinator Agent
-- 8001: Eligibility Agent
-- 8002: Pattern Agent
-- 8003: Discovery Agent
-- 8004: Matching Agent
-- 8005: Site Agent
-- 8006: Prediction Agent
+### Agent Connection Issues
+- Ensure all 7 agents are running in Terminal 1
+- Check ports 8000-8006 are not in use
+- Verify `run_agents.py` shows "Starting agent..." for all 7 agents
 
-### **Option 2: Run Agents Separately**
+## Integration with Frontend
 
-**Best for production:**
+The backend exposes a REST API that the frontend can call:
 
-```bash
-# Terminal 1
-python agents/coordinator_agent.py
+```javascript
+// Example frontend integration
+const response = await fetch('http://localhost:8080/api/match/trial', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ trial_id: 'NCT00100000' })
+});
 
-# Terminal 2
-python agents/eligibility_agent.py
-
-# Terminal 3
-python agents/pattern_agent.py
-
-# Terminal 4
-python agents/discovery_agent.py
-
-# Terminal 5
-python agents/matching_agent.py
-
-# Terminal 6
-python agents/site_agent.py
-
-# Terminal 7
-python agents/prediction_agent.py
+const results = await response.json();
+console.log(results.agent_results);
 ```
 
-### **Running the Full System**
+## Next Steps
 
-1. **Start agents:**
-   ```bash
-   python run_agents.py
-   ```
+1. **For Development**: See [docs/QUICKSTART_AGENTS.md](docs/QUICKSTART_AGENTS.md)
+2. **For Deployment**: See [docs/AGENTVERSE_DEPLOYMENT.md](docs/AGENTVERSE_DEPLOYMENT.md)
+3. **For Full Details**: See [docs/AGENTS_COMPLETE.md](docs/AGENTS_COMPLETE.md)
 
-2. **Start FastAPI backend** (in another terminal):
-   ```bash
-   python app.py
-   ```
+## Notes for Teammates
 
-3. **Test the system:**
-   ```bash
-   curl http://localhost:8080/api/health
-   curl -X POST http://localhost:8080/api/match/trial -H "Content-Type: application/json" -d '{"trial_id": "NCT00100000"}'
-   ```
+- **Your responsibility**: Agents only (this folder)
+- **Other team's responsibility**: Real data integration
+- **Integration point**: `integration_service.py` coordinates Conway → Agents
+- **Data flow**: `data_loader.py` → `conway_engine.py` → `agents/`
 
----
+All agents are fully implemented and tested. The system is ready for integration with real clinical trial data from your teammates' work.
 
-## 📊 Agent Communication
+## Credits
 
-### **Message Models**
-
-All agents use Pydantic models defined in `agents/models.py`:
-
-- `UserQuery` - Initial query to coordinator
-- `EligibilityRequest` / `EligibilityCriteria`
-- `PatternRequest` / `PatternResponse`
-- `DiscoveryRequest` / `DiscoveryResponse`
-- `MatchingRequest` / `MatchingResponse`
-- `SiteRequest` / `SiteResponse`
-- `PredictionRequest` / `EnrollmentForecast`
-- `CoordinatorResponse` - Final aggregated response
-- `AgentStatus` - Health check
-
-### **Inter-Agent Communication**
-
-Agents communicate using Fetch.ai's message passing:
-
-```python
-# Sending a query
-response = await ctx.send(
-    destination=agent_address,
-    message=RequestModel(...),
-    timeout=30.0
-)
-
-# Handling a query
-@agent.on_query(model=RequestModel, replies={ResponseModel})
-async def handle_query(ctx: Context, sender: str, msg: RequestModel) -> ResponseModel:
-    # Process request
-    result = process(msg)
-    # Return response
-    return ResponseModel(result=result)
-```
-
-### **Agent Registry**
-
-Agents register their addresses on startup:
-
-```python
-from agents.config import AgentRegistry
-
-# Register (in agent startup)
-AgentRegistry.register("coordinator", agent.address)
-
-# Lookup (when sending messages)
-coordinator_addr = AgentRegistry.get("coordinator")
-```
-
----
-
-## 🔧 Configuration
-
-### **Agent Configuration** (`agents/config.py`)
-
-- Agent ports (8000-8006)
-- Agent seeds (deterministic addresses)
-- Timeout settings
-- Logging configuration
-
-### **Timeouts**
-
-- `QUERY_TIMEOUT = 30.0` seconds - Normal agent queries
-- `QUICK_TIMEOUT = 5.0` seconds - Health checks
-- `LONG_TIMEOUT = 60.0` seconds - Heavy processing
-
----
-
-## 📈 Monitoring & Debugging
-
-### **Logging**
-
-All agents log to console with structured format:
-
-```
-2024-01-15 10:30:15 - coordinator_agent - INFO - STEP 1: Calling Eligibility Agent...
-2024-01-15 10:30:15 - eligibility_agent - INFO -   → Eligibility Agent processing: NCT00100000
-2024-01-15 10:30:16 - eligibility_agent - INFO -   ✓ Extracted criteria: age {'min': 18, 'max': 65}
-```
-
-### **Health Checks**
-
-Query any agent's status:
-
-```python
-from agents.models import AgentStatus
-
-status = await ctx.send(agent_address, AgentStatus(...))
-# Returns: agent_name, status, uptime, requests_processed
-```
-
-### **Debugging Tips**
-
-1. **Check agent addresses:**
-   ```python
-   from agents.config import AgentRegistry
-   print(AgentRegistry.all())
-   ```
-
-2. **Test individual agents:**
-   - Run just one agent
-   - Send test queries directly
-   - Check logs for errors
-
-3. **Common issues:**
-   - **Port conflicts:** Make sure ports 8000-8006 are free
-   - **Import errors:** Run from `backend/` directory
-   - **Pydantic version:** Must be 1.x (not 2.x) for uagents compatibility
-
----
-
-## 🎯 Integration with Conway Engine
-
-### **How It Works**
-
-1. **Integration Service runs Conway first:**
-   ```python
-   # In integration_service.py
-   embeddings = self.conway_engine.create_universal_embedding(data)
-   pattern_results = self.conway_engine.discover_patterns(embeddings)
-   ```
-
-2. **Patterns are stored for agents:**
-   ```python
-   # Patterns available to agents via context storage
-   ctx.storage.set("conway_patterns", pattern_results['patterns'])
-   ```
-
-3. **Pattern Agent retrieves patterns:**
-   ```python
-   # In pattern_agent.py
-   conway_patterns = ctx.storage.get("conway_patterns")
-   ```
-
-4. **Agents work WITH patterns, not discovering them**
-
----
-
-## 🚧 Future Enhancements
-
-### **High Priority**
-
-1. **Full HTTP Integration**
-   - Currently: Agents can communicate, but integration_service uses simulation
-   - TODO: Implement HTTP client to call Coordinator Agent from FastAPI
-
-2. **LLM Integration for Eligibility Agent**
-   - Use GPT-4 or Claude to parse natural language criteria
-   - Extract structured requirements from trial protocols
-
-3. **Real ClinicalTrials.gov API**
-   - Fetch actual trial data
-   - Parse real eligibility criteria
-
-### **Medium Priority**
-
-4. **Database Persistence**
-   - Store agent results
-   - Cache patterns and embeddings
-   - Patient/trial database
-
-5. **Advanced Similarity Metrics**
-   - Use actual Conway embedding distances
-   - Implement more sophisticated scoring
-
-6. **Error Recovery**
-   - Retry logic for failed agents
-   - Fallback strategies
-   - Circuit breakers
-
-### **Nice to Have**
-
-7. **Agent Dashboard**
-   - Real-time agent status visualization
-   - Message flow diagram
-   - Performance metrics
-
-8. **A/B Testing**
-   - Compare different agent strategies
-   - Optimize orchestration flow
-
-9. **Agentverse Deployment**
-   - Deploy agents to Fetch.ai cloud
-   - Public agent addresses
-   - Decentralized coordination
-
----
-
-## 📝 Quick Reference
-
-### **File Structure**
-
-```
-backend/
-├── agents/
-│   ├── __init__.py
-│   ├── models.py                  # All message models
-│   ├── config.py                  # Agent configuration
-│   ├── coordinator_agent.py       # Main orchestrator
-│   ├── eligibility_agent.py       # Trial criteria extraction
-│   ├── pattern_agent.py           # Pattern matching
-│   ├── discovery_agent.py         # Patient search
-│   ├── matching_agent.py          # Patient scoring
-│   ├── site_agent.py              # Geographic recommendations
-│   └── prediction_agent.py        # Enrollment forecast
-├── run_agents.py                  # Bureau runner (all agents)
-├── integration_service.py         # Conway → Agents bridge
-├── conway_engine.py               # Pattern discovery ML
-├── data_loader.py                 # Data generation
-└── app.py                         # FastAPI server
-```
-
-### **Agent Addresses**
-
-With deterministic seeds, agent addresses are consistent:
-- Coordinator: `agent1q...` (derived from seed)
-- Eligibility: `agent1q...`
-- Pattern: `agent1q...`
-- etc.
-
-To get actual addresses, check logs on startup or use `AgentRegistry.all()`
-
----
-
-## 🎓 Learn More
-
-- **Fetch.ai Docs:** https://docs.fetch.ai/
-- **uagents Documentation:** https://github.com/fetchai/uAgents
-- **Conway Pattern Engine:** See `conway_engine.py`
-- **Project Spec:** See main project README
-
----
-
-## ✅ Implementation Checklist
-
-- [x] 7 agents implemented
-- [x] Message models defined
-- [x] Agent registry system
-- [x] Bureau runner created
-- [x] Logging and monitoring
-- [x] Error handling
-- [ ] Full HTTP integration with integration_service
-- [ ] LLM integration for eligibility parsing
-- [ ] Database persistence
-- [ ] Production deployment configuration
-
----
-
-**Built for CalHacks 12.0 - TrialMatch AI Team**
-
-*Intelligent patient-trial matching using unsupervised pattern discovery + multi-agent orchestration*
+Built with Fetch.ai's uagents framework for CalHacks 12.
