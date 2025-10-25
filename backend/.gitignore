@@ -59,5 +59,11 @@ data/
 agents/__pycache__/
 agents/*.log
 
+# Agentverse credentials (IMPORTANT: Never commit these!)
+.env.agentverse
+*.key
+*_mailbox_keys.txt
+
 # OS metadata
 Thumbs.db
+.DS_Store
