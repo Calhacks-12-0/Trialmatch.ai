@@ -35,15 +35,22 @@ class SimplePatientMatcher:
         matched_patients = []
 
         for patient in patients_data:
-            score = self._calculate_match_score(trial_info, patient)
+            score_breakdown = self._calculate_match_score(trial_info, patient)
 
-            if score > 0:  # Only include patients with some match
+            if score_breakdown['overall_score'] > 0:  # Only include patients with some match
+                # Format location
+                city = patient.get('city', 'Unknown')
+                state = patient.get('state', 'Unknown')
+                location = f"{city}, {state}"
+
                 matched_patients.append({
                     'patient_id': patient['patient_id'],
                     'age': patient['age'],
                     'gender': patient['gender'],
                     'condition': patient['primary_condition'],
-                    'score': score
+                    'location': location,
+                    'score': score_breakdown['overall_score'],
+                    'subscores': score_breakdown['subscores']
                 })
 
         # Sort by score descending and take top N
@@ -65,55 +72,105 @@ class SimplePatientMatcher:
             'matches': top_matches
         }
 
-    def _calculate_match_score(self, trial: Dict, patient: Dict) -> int:
+    def _calculate_match_score(self, trial: Dict, patient: Dict) -> Dict:
         """
-        Calculate match score based on simple eligibility rules
-        Score ranges from 0-100
+        Calculate match score with detailed subscores
+        Returns dict with overall_score and subscores breakdown
         """
-        score = 0
+        # Seed random for consistent results per patient
+        np.random.seed(hash(patient['patient_id']) % 2**32)
 
-        # Age eligibility (30 points)
+        # 1. Medical Eligibility Fit (25 points)
+        medical_score = 0
+        medical_details = []
+
+        # Age eligibility
         if trial['min_age'] <= patient['age'] <= trial['max_age']:
-            score += 30
-            # Bonus for being in ideal age range (middle of trial range)
-            ideal_age = (trial['min_age'] + trial['max_age']) / 2
-            age_diff = abs(patient['age'] - ideal_age)
-            age_range = trial['max_age'] - trial['min_age']
-            if age_range > 0:
-                age_bonus = int(10 * (1 - age_diff / age_range))
-                score += max(0, age_bonus)
+            age_points = 10
+            medical_score += age_points
+            medical_details.append(f"Age {patient['age']} within range ({trial['min_age']}-{trial['max_age']})")
+        else:
+            medical_details.append(f"Age {patient['age']} outside range ({trial['min_age']}-{trial['max_age']})")
 
-        # Gender eligibility (20 points)
-        if trial['gender'] == 'All':
-            score += 20
-        elif trial['gender'] == 'Male' and patient['gender'] == 'M':
-            score += 20
-        elif trial['gender'] == 'Female' and patient['gender'] == 'F':
-            score += 20
-
-        # Condition matching (30 points)
+        # Condition matching
         trial_condition = trial['condition'].lower()
         patient_condition = patient['primary_condition'].lower()
-
-        # Check for exact or partial condition match
         if patient_condition in trial_condition or trial_condition in patient_condition:
-            score += 30
-        elif any(keyword in trial_condition for keyword in ['diabetes', 'cancer', 'cardiovascular', 'hypertension', 'alzheimer']):
-            # Partial match for common conditions
-            if any(keyword in patient_condition for keyword in ['diabetes', 'cancer', 'cardiovascular', 'hypertension', 'alzheimer']):
-                score += 15
+            medical_score += 10
+            medical_details.append(f"Condition match: {patient['primary_condition']}")
+        else:
+            medical_details.append(f"Partial condition match")
+            medical_score += 5
 
-        # Enrollment history bonus (10 points)
-        # Patients with previous successful enrollments get bonus points
-        if patient.get('enrollment_history', 0) > 0:
-            score += min(10, patient['enrollment_history'] * 3)
+        # Gender eligibility
+        if trial['gender'] == 'All' or (trial['gender'] == 'Male' and patient['gender'] == 'M') or (trial['gender'] == 'Female' and patient['gender'] == 'F'):
+            medical_score += 5
+            medical_details.append("Gender eligible")
 
-        # Add some randomness for demonstration (±5 points)
-        np.random.seed(hash(patient['patient_id']) % 2**32)
-        random_bonus = np.random.randint(-5, 6)
-        score += random_bonus
+        # 2. Feasibility / Logistics (25 points)
+        # Simulate distance, visit frequency, etc.
+        distance_score = np.random.randint(15, 26)
+        logistics_details = [
+            f"Est. distance: {np.random.randint(5, 50)} miles",
+            f"Visit frequency: {np.random.choice(['Weekly', 'Bi-weekly', 'Monthly'])}",
+            f"Travel readiness: {np.random.choice(['High', 'Medium', 'Low'])}"
+        ]
 
-        # Ensure score is between 0 and 100
-        score = max(0, min(100, score))
+        # 3. Predicted Clinical Value (25 points)
+        # Simulate biomarker signal, similar responders
+        clinical_value = np.random.randint(15, 26)
+        clinical_details = [
+            f"Biomarker signal: {np.random.choice(['Strong', 'Moderate', 'Weak'])}",
+            f"Similar responders: {np.random.randint(45, 95)}%",
+            f"Outcome cluster match: {np.random.choice(['High', 'Medium', 'Low'])}"
+        ]
 
-        return score
+        # 4. Enrollment Success Likelihood (25 points)
+        # Based on enrollment history and trial acceptance patterns
+        enrollment_base = 10 if patient.get('enrollment_history', 0) > 0 else 5
+        enrollment_bonus = np.random.randint(10, 16)
+        enrollment_score = enrollment_base + enrollment_bonus
+        enrollment_details = [
+            f"Prior enrollments: {patient.get('enrollment_history', 0)}",
+            f"Trial phase: {trial['phase']}",
+            f"Dropout risk: {np.random.choice(['Low', 'Medium', 'High'])}",
+            f"Acceptance likelihood: {np.random.randint(60, 95)}%"
+        ]
+
+        # Calculate overall score
+        overall_score = medical_score + distance_score + clinical_value + enrollment_score
+        overall_score = max(0, min(100, overall_score))
+
+        return {
+            'overall_score': overall_score,
+            'subscores': {
+                'medical_eligibility': {
+                    'score': medical_score,
+                    'max_score': 25,
+                    'label': 'Medical Eligibility Fit',
+                    'description': 'Hard inclusion/exclusion match',
+                    'details': medical_details
+                },
+                'feasibility': {
+                    'score': distance_score,
+                    'max_score': 25,
+                    'label': 'Feasibility / Logistics',
+                    'description': 'Can this patient realistically participate?',
+                    'details': logistics_details
+                },
+                'clinical_value': {
+                    'score': clinical_value,
+                    'max_score': 25,
+                    'label': 'Predicted Clinical Value',
+                    'description': 'Will this trial likely help this patient?',
+                    'details': clinical_details
+                },
+                'enrollment_likelihood': {
+                    'score': enrollment_score,
+                    'max_score': 25,
+                    'label': 'Enrollment Success Likelihood',
+                    'description': 'Will the trial likely accept them?',
+                    'details': enrollment_details
+                }
+            }
+        }
