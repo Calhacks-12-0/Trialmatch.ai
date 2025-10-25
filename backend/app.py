@@ -101,6 +101,39 @@ async def match_trial(request: TrialMatchRequest):
         logger.error(f"Processing failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/match/trial/agents")
+async def match_trial_with_agents(request: TrialMatchRequest):
+    """
+    Full agent pipeline with Conway pattern discovery
+    Uses real ClinicalTrials.gov data + Fetch.ai agents
+
+    Flow: Real Trial Data → Conway Pattern Discovery → 7 Fetch.ai Agents → Results
+    """
+    try:
+        trial_id = request.trial_id
+        if not trial_id:
+            raise HTTPException(status_code=400, detail="trial_id is required")
+
+        logger.info(f"Full agent pipeline for trial: {trial_id}")
+        logger.info("Pipeline: ClinicalTrials.gov → Conway → Fetch.ai Agents")
+
+        # Run full pipeline with real data and agents
+        results = await integration_service.process_trial_matching(
+            trial_id=trial_id,
+            use_synthea=False,  # Use synthetic patients (can change to True if Synthea data available)
+            max_patients=1000
+        )
+
+        logger.info(f"Agent pipeline completed in {results['processing_time']}")
+
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Agent pipeline failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/patterns")
 async def get_patterns():
     """Get discovered patterns for visualization"""
