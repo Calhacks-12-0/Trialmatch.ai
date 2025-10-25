@@ -1,0 +1,63 @@
+# ---------------------------
+# Python / FastAPI backend
+# ---------------------------
+
+# Virtual environment
+venv/
+.env/
+.venv/
+
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# macOS system files
+.DS_Store
+
+# Logs and debug files
+*.log
+*.out
+*.err
+
+# Byte-compiled / optimized / DLL files
+*.so
+*.dll
+*.dylib
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+*.egg-info/
+MANIFEST
+
+# Jupyter notebooks checkpoints (if any)
+.ipynb_checkpoints/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+
+# Coverage / testing
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+htmlcov/
+pytest_cache/
+
+# Temporary / data files
+tmp/
+temp/
+data/
+*.csv
+*.json
+
+# Fetch.ai agent logs or configs
+agents/__pycache__/
+agents/*.log
+
+# OS metadata
+Thumbs.db
