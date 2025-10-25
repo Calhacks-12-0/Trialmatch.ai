@@ -110,9 +110,18 @@ async def get_patterns():
     # Get patient data for insights
     patient_data = integration_service.data_loader.patients_df.to_dict('records') if integration_service.data_loader.patients_df is not None else None
 
+    # Get 3D embeddings and cluster labels for visualization
+    embeddings_3d = []
+    cluster_labels = []
+    if hasattr(integration_service.conway_engine, 'reduced_embeddings_3d') and hasattr(integration_service.conway_engine, 'cluster_labels'):
+        embeddings_3d = integration_service.conway_engine.reduced_embeddings_3d[:1000].tolist()
+        cluster_labels = integration_service.conway_engine.cluster_labels[:1000].tolist()
+
     return {
         'patterns': integration_service.conway_engine.patterns[:10],
-        'insights': integration_service.conway_engine.get_pattern_insights(patient_data=patient_data)[:10]
+        'insights': integration_service.conway_engine.get_pattern_insights(patient_data=patient_data)[:10],
+        'embeddings_3d': embeddings_3d,
+        'cluster_labels': cluster_labels
     }
 
 @app.get("/api/agents/status")
@@ -130,6 +139,112 @@ async def get_agent_status():
         'total_messages': 789,
         'avg_response_time': '234ms'
     }
+
+@app.get("/api/patients/geographic")
+async def get_patient_geographic_distribution():
+    """
+    Get patient geographic distribution and recommended trial sites
+    Returns patient locations and clustered site recommendations
+    """
+    try:
+        import numpy as np
+        from sklearn.cluster import KMeans
+
+        logger.info("Fetching patient geographic distribution...")
+
+        # Load patient data
+        data_loader_instance = ClinicalDataLoader()
+        patients_df = data_loader_instance.generate_synthetic_patients(n_patients=2000)
+
+        # Extract geographic coordinates
+        patients_data = patients_df.to_dict('records')
+        patient_locations = []
+
+        for patient in patients_data:
+            patient_locations.append({
+                'patient_id': patient['patient_id'],
+                'latitude': float(patient['latitude']),
+                'longitude': float(patient['longitude']),
+                'age': patient['age'],
+                'condition': patient['primary_condition']
+            })
+
+        # Perform geographic clustering to identify optimal site locations
+        coordinates = np.array([[p['latitude'], p['longitude']] for p in patient_locations])
+
+        # Use k-means to find 8 optimal site locations
+        n_sites = 8
+        kmeans = KMeans(n_clusters=n_sites, random_state=42, n_init=10)
+        kmeans.fit(coordinates)
+
+        # Calculate cluster assignments and densities
+        cluster_labels = kmeans.labels_
+        cluster_centers = kmeans.cluster_centers_
+
+        # Build recommended sites with patient counts
+        recommended_sites = []
+        site_names = [
+            "Memorial Medical Center",
+            "University Hospital",
+            "Regional Research Institute",
+            "City Health Center",
+            "Coastal Medical Campus",
+            "Metro Clinical Research",
+            "Valley Healthcare System",
+            "Northside Medical Complex"
+        ]
+
+        for i, center in enumerate(cluster_centers):
+            cluster_patients = np.sum(cluster_labels == i)
+            cluster_patient_data = [p for j, p in enumerate(patient_locations) if cluster_labels[j] == i]
+
+            # Calculate average age and condition distribution for cluster
+            avg_age = np.mean([p['age'] for p in cluster_patient_data])
+            conditions = [p['condition'] for p in cluster_patient_data]
+            condition_counts = {}
+            for cond in conditions:
+                condition_counts[cond] = condition_counts.get(cond, 0) + 1
+
+            primary_condition = max(condition_counts.items(), key=lambda x: x[1])[0] if condition_counts else 'unknown'
+
+            # Estimate capacity based on patient density
+            capacity = min(95, 60 + (cluster_patients // 30))
+
+            recommended_sites.append({
+                'id': i + 1,
+                'name': site_names[i],
+                'latitude': float(center[0]),
+                'longitude': float(center[1]),
+                'patient_count': int(cluster_patients),
+                'avg_age': round(float(avg_age), 1),
+                'primary_condition': primary_condition,
+                'capacity': int(capacity),
+                'cluster_id': i
+            })
+
+        # Sort by patient count (highest density first)
+        recommended_sites.sort(key=lambda x: x['patient_count'], reverse=True)
+
+        # Assign cluster_id to each patient for visualization
+        for i, patient in enumerate(patient_locations):
+            patient['cluster_id'] = int(cluster_labels[i])
+
+        logger.info(f"Analyzed {len(patient_locations)} patients across {n_sites} geographic clusters")
+
+        return {
+            'patients': patient_locations,
+            'recommended_sites': recommended_sites,
+            'total_patients': len(patient_locations),
+            'total_sites': len(recommended_sites),
+            'metadata': {
+                'clustering_method': 'k-means',
+                'n_clusters': n_sites
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Geographic analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

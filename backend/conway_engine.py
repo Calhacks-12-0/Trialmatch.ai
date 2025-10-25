@@ -20,6 +20,8 @@ class ConwayPatternEngine:
         self.text_encoder = SentenceTransformer('all-MiniLM-L6-v2')
         self.numeric_scaler = StandardScaler()
         self.reducer = umap.UMAP(n_components=50, random_state=42, n_neighbors=10, min_dist=0.0)
+        # 3D UMAP for visualization
+        self.reducer_3d = umap.UMAP(n_components=3, random_state=42, n_neighbors=10, min_dist=0.0)
         # More sensitive clustering to detect finer patterns
         self.clustering = HDBSCAN(
             min_cluster_size=30,  # Even smaller clusters (was 50)
@@ -76,7 +78,11 @@ class ConwayPatternEngine:
         # Reduce dimensionality while preserving structure
         logger.info("Reducing dimensionality with UMAP...")
         reduced_embeddings = self.reducer.fit_transform(embeddings)
-        
+
+        # Also create 3D embeddings for visualization
+        logger.info("Creating 3D visualization embeddings...")
+        reduced_embeddings_3d = self.reducer_3d.fit_transform(embeddings)
+
         # Find natural clusters without labels
         logger.info("Discovering clusters with HDBSCAN...")
         cluster_labels = self.clustering.fit_predict(reduced_embeddings)
@@ -116,6 +122,7 @@ class ConwayPatternEngine:
         self.patterns = patterns
         self.cluster_labels = cluster_labels  # Store for later use in insights
         self.original_embeddings = embeddings  # Store original embeddings for similarity
+        self.reduced_embeddings_3d = reduced_embeddings_3d  # Store 3D embeddings for visualization
 
         logger.info(f"Discovered {len(patterns)} patterns from {len(embeddings)} patients")
 
@@ -124,7 +131,8 @@ class ConwayPatternEngine:
             'total_patients': len(embeddings),
             'clustered_patients': (cluster_labels != -1).sum(),
             'noise_patients': (cluster_labels == -1).sum(),
-            'embeddings': reduced_embeddings.tolist()[:1000],  # Sample for visualization
+            'embeddings': reduced_embeddings.tolist()[:1000],  # Sample for 2D visualization
+            'embeddings_3d': reduced_embeddings_3d.tolist()[:1000],  # Sample for 3D visualization
             'cluster_labels': cluster_labels.tolist()[:1000]
         }
     
