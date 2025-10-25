@@ -48,11 +48,160 @@ class ClinicalDataLoader:
         return self.patients_df
     
     def fetch_clinical_trials(self, condition: str = "diabetes", max_trials: int = 100) -> pd.DataFrame:
-        """Fetch real clinical trials from ClinicalTrials.gov API"""
-        logger.info(f"Fetching {max_trials} trials for condition: {condition}")
-        
-        # For hackathon demo, generate synthetic trials instead of API call
-        # (API might be slow/down during hackathon)
+        """Fetch real clinical trials from ClinicalTrials.gov API v2"""
+        logger.info(f"Fetching trials for condition: {condition} from ClinicalTrials.gov API")
+
+        trials = []
+        page_token = None
+        fetched_count = 0
+
+        try:
+            # ClinicalTrials.gov API v2 endpoint
+            endpoint = f"{self.base_url}studies"
+
+            while fetched_count < max_trials:
+                # Build query parameters
+                params = {
+                    'query.cond': condition,
+                    'pageSize': min(100, max_trials - fetched_count),  # Max 100 per request
+                    'filter.overallStatus': 'RECRUITING',  # Only recruiting trials
+                    'format': 'json'
+                }
+
+                if page_token:
+                    params['pageToken'] = page_token
+
+                logger.info(f"Requesting {params['pageSize']} trials (total so far: {fetched_count})")
+
+                # Make API request with timeout
+                response = requests.get(endpoint, params=params, timeout=30)
+                response.raise_for_status()
+
+                data = response.json()
+                studies = data.get('studies', [])
+
+                if not studies:
+                    logger.info("No more studies available")
+                    break
+
+                # Parse each study
+                for study in studies:
+                    try:
+                        trial = self._parse_study(study)
+                        trials.append(trial)
+                        fetched_count += 1
+
+                        if fetched_count >= max_trials:
+                            break
+                    except Exception as e:
+                        logger.warning(f"Error parsing study: {e}")
+                        continue
+
+                # Check for next page
+                page_token = data.get('nextPageToken')
+                if not page_token:
+                    break
+
+            logger.info(f"Successfully fetched {len(trials)} trials from ClinicalTrials.gov")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            logger.warning("Falling back to synthetic data generation")
+            return self._generate_synthetic_trials(condition, max_trials)
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            logger.warning("Falling back to synthetic data generation")
+            return self._generate_synthetic_trials(condition, max_trials)
+
+        if not trials:
+            logger.warning("No trials fetched, generating synthetic data")
+            return self._generate_synthetic_trials(condition, max_trials)
+
+        self.trials_df = pd.DataFrame(trials)
+
+        # Save sample for sanity check
+        self._save_sample_trials(trials[:10])
+
+        logger.info(f"Loaded {len(self.trials_df)} trials")
+        return self.trials_df
+
+    def _parse_study(self, study: Dict) -> Dict:
+        """Parse a study from ClinicalTrials.gov API response"""
+        protocol = study.get('protocolSection', {})
+        identification = protocol.get('identificationModule', {})
+        description = protocol.get('descriptionModule', {})
+        design = protocol.get('designModule', {})
+        eligibility = protocol.get('eligibilityModule', {})
+        status = protocol.get('statusModule', {})
+
+        # Extract phase
+        phases = design.get('phases', [])
+        phase = phases[0] if phases else 'Not Specified'
+
+        # Extract enrollment
+        enrollment_info = design.get('enrollmentInfo', {})
+        enrollment_target = enrollment_info.get('count', np.random.randint(50, 500))
+
+        # Extract age eligibility
+        min_age_str = eligibility.get('minimumAge', '18 Years')
+        max_age_str = eligibility.get('maximumAge', '90 Years')
+
+        # Parse age strings (e.g., "18 Years" -> 18)
+        try:
+            min_age = int(''.join(filter(str.isdigit, min_age_str))) if min_age_str else 18
+        except:
+            min_age = 18
+
+        try:
+            max_age = int(''.join(filter(str.isdigit, max_age_str))) if max_age_str else 90
+        except:
+            max_age = 90
+
+        # Extract gender
+        sex = eligibility.get('sex', 'ALL')
+        gender_map = {'MALE': 'Male', 'FEMALE': 'Female', 'ALL': 'All'}
+        gender = gender_map.get(sex, 'All')
+
+        # Extract criteria
+        criteria_text = eligibility.get('eligibilityCriteria', '')
+        inclusion_criteria = self._extract_criteria_list(criteria_text)
+
+        # Extract locations (sites count)
+        locations = protocol.get('contactsLocationsModule', {}).get('locations', [])
+        sites_count = len(locations) if locations else np.random.randint(1, 10)
+
+        # Extract conditions
+        conditions = protocol.get('conditionsModule', {}).get('conditions', [])
+        primary_condition = conditions[0] if conditions else 'Not Specified'
+
+        return {
+            'nct_id': identification.get('nctId', 'NCT00000000'),
+            'title': identification.get('briefTitle', 'No title available'),
+            'condition': primary_condition,
+            'phase': phase,
+            'enrollment_target': enrollment_target,
+            'min_age': min_age,
+            'max_age': max_age,
+            'gender': gender,
+            'inclusion_criteria': inclusion_criteria,
+            'sites': sites_count,
+            'status': status.get('overallStatus', 'Unknown')
+        }
+
+    def _extract_criteria_list(self, criteria_text: str) -> List[str]:
+        """Extract criteria from eligibility criteria text"""
+        if not criteria_text:
+            return self._generate_criteria()
+
+        # Split by common delimiters and take first few meaningful lines
+        lines = [line.strip() for line in criteria_text.split('\n') if line.strip()]
+        criteria = [line for line in lines if len(line) > 10 and not line.startswith('Exclusion')][:5]
+
+        return criteria if criteria else self._generate_criteria()
+
+    def _generate_synthetic_trials(self, condition: str, max_trials: int) -> pd.DataFrame:
+        """Generate synthetic trials as fallback"""
+        logger.info(f"Generating {max_trials} synthetic trials for {condition}")
         trials = []
         for i in range(max_trials):
             trial = {
@@ -69,10 +218,17 @@ class ClinicalDataLoader:
                 'status': 'Recruiting'
             }
             trials.append(trial)
-        
-        self.trials_df = pd.DataFrame(trials)
-        logger.info(f"Loaded {len(self.trials_df)} trials")
-        return self.trials_df
+        return pd.DataFrame(trials)
+
+    def _save_sample_trials(self, trials: List[Dict]):
+        """Save a sample of trials for sanity checking"""
+        try:
+            sample_file = 'trials_sample.json'
+            with open(sample_file, 'w') as f:
+                json.dump(trials, f, indent=2)
+            logger.info(f"Saved sample trials to {sample_file} for sanity check")
+        except Exception as e:
+            logger.warning(f"Could not save sample file: {e}")
     
     def _generate_criteria(self) -> List[str]:
         """Generate sample inclusion/exclusion criteria"""
