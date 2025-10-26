@@ -150,18 +150,49 @@ async def get_patterns():
 
 @app.get("/api/agents/status")
 async def get_agent_status():
-    """Get Fetch.ai agent network status"""
+    """Get Fetch.ai agent network status by checking if Bureau is running"""
+    from agents.config import AgentConfig
+    import socket
+
+    def check_port(port: int) -> bool:
+        """Check if a port is open (agent is running)"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex(('localhost', port))
+            sock.close()
+            return result == 0
+        except:
+            return False
+
+    # Check if Bureau is running on port 8001 (all agents run through Bureau)
+    bureau_active = check_port(8001)
+
+    agent_info = [
+        {'name': 'Coordinator Agent', 'port': AgentConfig.COORDINATOR_PORT},
+        {'name': 'Eligibility Agent', 'port': AgentConfig.ELIGIBILITY_PORT},
+        {'name': 'Pattern Agent', 'port': AgentConfig.PATTERN_PORT},
+        {'name': 'Discovery Agent', 'port': AgentConfig.DISCOVERY_PORT},
+        {'name': 'Matching Agent', 'port': AgentConfig.MATCHING_PORT},
+        {'name': 'Site Agent', 'port': AgentConfig.SITE_PORT},
+        {'name': 'Prediction Agent', 'port': AgentConfig.PREDICTION_PORT}
+    ]
+
+    agents_status = []
+
+    # If Bureau is active, all agents are active
+    for agent in agent_info:
+        agents_status.append({
+            'name': agent['name'],
+            'status': 'active' if bureau_active else 'offline',
+            'port': agent['port']
+        })
+
     return {
-        'agents': [
-            {'name': 'Coordinator', 'status': 'active', 'tasks': 45},
-            {'name': 'Pattern Discovery', 'status': 'active', 'tasks': 234},
-            {'name': 'Eligibility', 'status': 'active', 'tasks': 189},
-            {'name': 'Matching', 'status': 'active', 'tasks': 156},
-            {'name': 'Site Selection', 'status': 'idle', 'tasks': 98},
-            {'name': 'Prediction', 'status': 'active', 'tasks': 67}
-        ],
-        'total_messages': 789,
-        'avg_response_time': '234ms'
+        'agents': agents_status,
+        'active_count': len(agent_info) if bureau_active else 0,
+        'total_count': len(agent_info),
+        'bureau_active': bureau_active
     }
 
 if __name__ == "__main__":
