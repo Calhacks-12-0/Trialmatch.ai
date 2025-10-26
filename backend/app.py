@@ -50,55 +50,91 @@ async def get_dashboard_metrics():
 @app.post("/api/match/trial")
 async def match_trial(request: TrialMatchRequest):
     """
-    Simple patient matching endpoint (Prototype)
-    Uses basic rule-based matching before full Conway/Fetch.ai pipeline
+    Full agent-powered matching with Conway pattern discovery
+    Uses: Real Trial → Synthea FHIR Data → Conway Patterns → 7 Fetch.ai Agents → Best Matches
     """
     try:
         trial_id = request.trial_id
         if not trial_id:
             raise HTTPException(status_code=400, detail="trial_id is required")
 
-        logger.info(f"Simple matching for trial: {trial_id}")
+        logger.info(f"Agent-powered matching for trial: {trial_id}")
+        logger.info("Pipeline: Trial ID → Synthea Data → Conway → 7 Agents → Best Matches")
 
-        # Fetch trial details from ClinicalTrials.gov
-        data_loader_instance = ClinicalDataLoader()
+        # Run full pipeline: Synthea + Conway + Agents
+        results = await integration_service.process_trial_matching(
+            trial_id=trial_id,
+            use_synthea=True,  # Use real Synthea FHIR data
+            max_patients=1000  # Faster: 1000 patients (~10-15 seconds)
+        )
 
-        # Try to fetch the specific trial
-        try:
-            import requests
-            response = requests.get(
-                f"https://clinicaltrials.gov/api/v2/studies/{trial_id}",
-                timeout=10
-            )
+        logger.info(f"Agent pipeline completed in {results['processing_time']}")
 
-            if response.status_code == 200:
-                study_data = response.json()
-                study = study_data.get('studies', [{}])[0] if 'studies' in study_data else study_data
+        # Extract patient matches from agent results
+        agent_results = results.get('agent_results', {})
+        eligible_patients = agent_results.get('eligible_patients', [])
 
-                # Parse the trial using data_loader's parse method
-                trial_info = data_loader_instance._parse_study(study)
-            else:
-                raise HTTPException(status_code=404, detail=f"Trial {trial_id} not found")
+        # If no matches from agents, return empty list with proper structure
+        if not eligible_patients:
+            logger.warning("No eligible patients returned from agents/fallback")
+            eligible_patients = []
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to fetch trial: {e}")
-            raise HTTPException(status_code=500, detail="Failed to fetch trial from ClinicalTrials.gov")
+        # Get trial info from results
+        trial_data = results.get('trial_data', {})
 
-        # Generate synthetic patient data
-        patients_df = data_loader_instance.generate_synthetic_patients(n_patients=1000)
-        patients_data = patients_df.to_dict('records')
+        # Convert match_score to score and add subscores for frontend
+        formatted_matches = []
+        for patient in (eligible_patients[:10] if eligible_patients else []):
+            match_score = patient.get('match_score', 0.0)
+            # Convert to percentage if it's a decimal
+            if match_score <= 1.0:
+                match_score = int(match_score * 100)
 
-        # Perform simple matching
-        results = simple_matcher.match_patients_to_trial(trial_info, patients_data, top_n=10)
+            formatted_match = {
+                'patient_id': patient.get('patient_id', 'Unknown'),
+                'age': patient.get('age', 0),
+                'gender': patient.get('gender', 'U'),
+                'condition': patient.get('condition', 'Unknown'),
+                'location': patient.get('location', 'Unknown'),
+                'score': match_score,  # Frontend expects 'score' not 'match_score'
+                'subscores': patient.get('subscores', {})
+            }
+            formatted_matches.append(formatted_match)
 
-        logger.info(f"Matched {results['total_matches']} patients, returning top {len(results['matches'])}")
+        # Format response to match frontend expectations
+        formatted_response = {
+            'trial_info': {
+                'nct_id': trial_id,
+                'title': trial_data.get('title', f'Clinical Trial {trial_id}'),
+                'condition': trial_data.get('condition', 'Not specified'),
+                'phase': trial_data.get('phase', 'Unknown'),
+            },
+            'trial_id': trial_id,  # Keep for backward compatibility
+            'total_matches': agent_results.get('eligible_patients_found', len(eligible_patients)),
+            'matches': formatted_matches,
+            'date_added': __import__('datetime').datetime.now().isoformat(),
+            'patterns_used': results.get('statistics', {}).get('patterns_discovered', 0),
+            'agent_status': {
+                'agents_activated': agent_results.get('agents_activated', []),
+                'coordinator_status': agent_results.get('coordinator_status', 'unknown'),
+                'processing_time': results.get('processing_time', '0'),
+                'note': agent_results.get('note', 'Pipeline completed')
+            },
+            'conway_stats': {
+                'total_patients': results.get('statistics', {}).get('total_patients', 0),
+                'patterns_discovered': results.get('statistics', {}).get('patterns_discovered', 0),
+                'clustered_patients': results.get('statistics', {}).get('clustered_patients', 0)
+            }
+        }
 
-        return results
+        logger.info(f"Returning {len(formatted_response['matches'])} matches to frontend")
+        logger.info(f"Trial info: {formatted_response['trial_info']}")
+        return formatted_response
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Processing failed: {e}")
+        logger.error(f"Agent pipeline failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/match/trial/agents")

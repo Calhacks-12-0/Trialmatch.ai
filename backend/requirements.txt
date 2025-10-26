@@ -22,3 +22,4 @@ pydantic>=2.0.0
 
 # Utilities
 requests>=2.32.0
+aiohttp>=3.10.0  # For async HTTP requests to agent network
