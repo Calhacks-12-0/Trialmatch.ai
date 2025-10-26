@@ -16,18 +16,35 @@ This addresses the advisor's requirement for "trial and site feasibility
 based on controlled terminology sets" using Epic EHR standards.
 """
 
-from uagents import Agent, Context
+from uagents import Agent, Context, Protocol
 import logging
 import time
 import numpy as np
 from collections import defaultdict
 import sys
 import os
+from datetime import datetime
+from uuid import uuid4
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import Fetch.AI official chat protocol
+from uagents_core.contrib.protocols.chat import (
+    ChatMessage,
+    ChatAcknowledgement,
+    TextContent,
+    chat_protocol_spec
+)
+
 from agents.models import SiteRequest, SiteResponse, AgentStatus
 from agents.config import AgentConfig, AgentRegistry
+from agentverse_config import (
+    get_agent_address,
+    is_agentverse_mode,
+    get_agents_to_talk_to,
+    validate_configuration
+)
+
 from site_feasibility_scorer import SiteFeasibilityScorer
 
 logging.basicConfig(level=logging.INFO)
@@ -36,22 +53,56 @@ logger = logging.getLogger(__name__)
 config = AgentConfig.get_agent_config("site")
 agent = Agent(**config)
 
+# Initialize the official Fetch.AI chat protocol
+chat_proto = Protocol(spec=chat_protocol_spec)
+
 agent_state = {
     "requests_processed": 0,
     "start_time": time.time(),
-    "feasibility_scorer": None
+    "feasibility_scorer": None,
+    "agentverse_addresses": {},
+    "is_agentverse": False,
+    "coordinator_address": None
 }
 
 
 @agent.on_event("startup")
 async def startup(ctx: Context):
-    logger.info(f"✓ Site Agent started: {agent.address}")
-    AgentRegistry.register("site", agent.address)
-
+    logger.info(f"✓ Site Agent started: {ctx.agent.address}")
+    AgentRegistry.register("site", ctx.agent.address)
     # Initialize feasibility scorer
     agent_state["feasibility_scorer"] = SiteFeasibilityScorer()
-    logger.info(f"  ✓ Loaded {len(agent_state['feasibility_scorer'].sites)} sites for feasibility scoring")
 
+    # Check if running in Agentverse mode
+    agent_state["is_agentverse"] = is_agentverse_mode()
+
+    if agent_state["is_agentverse"]:
+        logger.info("🌐 Running in AGENTVERSE MODE")
+
+        # Get coordinator address
+        coordinator_addr = get_agent_address("coordinator")
+        if coordinator_addr:
+            agent_state["coordinator_address"] = coordinator_addr
+            logger.info(f"  ✓ Loaded coordinator address: {coordinator_addr[:20]}...")
+
+            # Send greeting to coordinator
+            try:
+                greeting = ChatMessage(
+                    timestamp=datetime.utcnow(),
+                    msg_id=uuid4(),
+                    content=[TextContent(
+                        type="text",
+                        text="Hello from Site Agent! Ready to recommend trial sites based on feasibility and patient geography!"
+                    )]
+                )
+                await ctx.send(coordinator_addr, greeting)
+                logger.info(f"  ✓ Sent greeting to coordinator")
+            except Exception as e:
+                logger.error(f"  ❌ Failed to send greeting to coordinator: {e}")
+        else:
+            logger.warning(f"  ⚠ Missing coordinator address - update agentverse_config.py")
+    else:
+        logger.info("🏠 Running in LOCAL MODE")
 
 @agent.on_message(model=SiteRequest)
 async def handle_site_request(ctx: Context, sender: str, msg: SiteRequest):
@@ -279,6 +330,41 @@ async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
             "feasibility_scoring": "enabled"
         }
     ))
+
+
+# ============================================================================
+# CHAT PROTOCOL HANDLER (Official Fetch.AI)
+# ============================================================================
+
+@chat_proto.on_message(ChatMessage)
+async def handle_chat_message(ctx: Context, sender: str, msg: ChatMessage):
+    """Handle incoming chat messages using official Fetch.AI protocol"""
+    for item in msg.content:
+        if isinstance(item, TextContent):
+            # Log received message
+            logger.info(f"💬 Site Agent received chat message from {sender}: {item.text}")
+
+            # Send acknowledgment
+            ack = ChatAcknowledgement(
+                timestamp=datetime.utcnow(),
+                acknowledged_msg_id=msg.msg_id
+            )
+            await ctx.send(sender, ack)
+
+            # NOTE: We don't send a response ChatMessage to avoid infinite loops.
+            # Actual work requests should use specific message types (EligibilityRequest, etc.),
+            # not ChatMessage.
+            agent_state["requests_processed"] += 1
+
+
+@chat_proto.on_message(ChatAcknowledgement)
+async def handle_acknowledgement(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    """Handle chat acknowledgements"""
+    logger.info(f"✓ Site received acknowledgement from {sender} for message: {msg.acknowledged_msg_id}")
+
+
+# Include chat protocol in agent
+agent.include(chat_proto, publish_manifest=True)
 
 
 if __name__ == "__main__":

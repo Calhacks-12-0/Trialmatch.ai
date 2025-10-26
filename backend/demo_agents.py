@@ -2,7 +2,7 @@
 Demo script to see agents in action!
 
 This script tests the full pipeline:
-1. Conway discovers patterns
+1. Pattern Discovery discovers patterns
 2. API calls agents
 3. Agents coordinate to match patients
 """
@@ -51,13 +51,13 @@ except:
 print()
 
 # View discovered patterns
-print("Step 3: Viewing Conway's discovered patterns...")
+print("Step 3: Viewing Pattern Discovery's discovered patterns...")
 try:
     response = requests.get("http://localhost:8080/api/patterns")
     if response.status_code == 200:
         data = response.json()
         patterns = data.get('pattern_insights', [])
-        print(f"✓ Conway discovered {len(patterns)} patterns!")
+        print(f"✓ Pattern Discovery discovered {len(patterns)} patterns!")
         print()
 
         # Show first 3 patterns
@@ -83,7 +83,7 @@ print()
 print("Agent workflow:")
 print("  1. Coordinator receives query")
 print("  2. Eligibility Agent extracts trial criteria")
-print("  3. Pattern Agent matches Conway patterns")
+print("  3. Pattern Agent matches patient patterns")
 print("  4. Discovery Agent finds patient candidates")
 print("  5. Matching Agent scores patients")
 print("  6. Site Agent recommends locations")
@@ -168,7 +168,7 @@ print("=" * 70)
 print("WHAT'S HAPPENING BEHIND THE SCENES:")
 print("=" * 70)
 print()
-print("1. Conway Pattern Engine:")
+print("1. Pattern Discovery Pattern Engine:")
 print("   • Creates multi-modal embeddings (text + numeric + geo)")
 print("   • Uses UMAP for dimensionality reduction")
 print("   • Applies HDBSCAN for unsupervised clustering")

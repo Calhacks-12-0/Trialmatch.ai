@@ -446,7 +446,7 @@ function DashboardView() {
           <CardHeader>
             <CardTitle>Pattern Distribution</CardTitle>
             <p className="text-xs text-gray-500 mt-1">
-              Conway engine discovered patient patterns with match quality
+              Pattern Discovery Engine discovered patient patterns with match quality
             </p>
           </CardHeader>
           <CardContent>
@@ -815,7 +815,7 @@ function PatternsView() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#0B5394]" />
-          <p className="text-gray-500">Loading Conway patterns from 5000 Synthea patients...</p>
+          <p className="text-gray-500">Loading Pattern Discovery patterns from 5000 Synthea patients...</p>
         </div>
       </div>
     );
@@ -828,7 +828,7 @@ function PatternsView() {
         <CardHeader>
           <CardTitle>Discovered Patterns</CardTitle>
           <p className="text-xs text-gray-500 mt-1">
-            Conway unsupervised learning discovered {patterns.length} distinct patient clusters from real Synthea FHIR data
+            Pattern Discovery unsupervised learning discovered {patterns.length} distinct patient clusters from real Synthea FHIR data
           </p>
         </CardHeader>
         <CardContent className="pb-8">
@@ -1120,19 +1120,19 @@ function AgentsView() {
       color: "#0B5394"
     },
     "Pattern Agent": {
-      description: "Matches Conway patterns to trial requirements",
+      description: "Matches Pattern Discovery patterns to trial requirements",
       role: "Pattern Matching",
       icon: Sparkles,
       color: "#6B46C1"
     },
     "Discovery Agent": {
-      description: "Searches patient database for candidates matching Conway patterns",
+      description: "Searches patient database for candidates matching Pattern Discovery patterns",
       role: "Patient Discovery",
       icon: UserSearch,
       color: "#0B5394"
     },
     "Matching Agent": {
-      description: "Scores patients using Conway's similarity metrics",
+      description: "Scores patients using Pattern Discovery's similarity metrics",
       role: "Patient Scoring",
       icon: TrendingUp,
       color: "#52C41A"
@@ -1196,7 +1196,7 @@ function AgentsView() {
         <CardHeader>
           <CardTitle>Fetch.ai Agent Network</CardTitle>
           <p className="text-sm text-gray-500 mt-2">
-            7 specialized agents working together with Conway Pattern Discovery
+            7 specialized agents working together with Pattern Discovery Pattern Discovery
           </p>
         </CardHeader>
         <CardContent>
@@ -1290,7 +1290,7 @@ function AgentsView() {
                   <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#0B5394]">
                     <Sparkles className="w-7 h-7 text-[#0B5394]" />
                   </div>
-                  <span className="text-xs font-medium mt-2">Conway Engine</span>
+                  <span className="text-xs font-medium mt-2">Pattern Discovery Engine</span>
                 </div>
                 <span className="text-2xl text-gray-400 hidden md:block">→</span>
               </div>

@@ -189,15 +189,15 @@ def test_data_loader():
 
 
 def test_conway_engine():
-    """Test Conway pattern engine"""
-    logger.info("Testing Conway engine...")
+    """Test patient pattern engine"""
+    logger.info("Testing Pattern Discovery engine...")
 
     try:
-        from conway_engine import ConwayPatternEngine
+        from conway_engine import Pattern DiscoveryPatternEngine
         from data_loader import ClinicalDataLoader
 
-        engine = ConwayPatternEngine()
-        logger.info("✓ ConwayPatternEngine instantiated")
+        engine = Pattern DiscoveryPatternEngine()
+        logger.info("✓ Pattern DiscoveryPatternEngine instantiated")
 
         # Generate small test dataset
         loader = ClinicalDataLoader()
@@ -216,7 +216,7 @@ def test_conway_engine():
         return True
 
     except Exception as e:
-        logger.error(f"✗ Conway engine error: {e}")
+        logger.error(f"✗ Pattern Discovery engine error: {e}")
         return False
 
 
@@ -262,7 +262,7 @@ def main():
         "Message Models": test_message_models(),
         "Agent Config": test_agent_config(),
         "Data Loader": test_data_loader(),
-        "Conway Engine": test_conway_engine()
+        "Pattern Discovery Engine": test_conway_engine()
     }
 
     all_passed = print_summary(results)

@@ -1,6 +1,6 @@
 """
 Simple Patient-Trial Matching Algorithm (Sanity Check)
-This is a prototype matching system before the full Conway/Fetch.ai pipeline is implemented.
+This is a prototype matching system before the full Pattern Discovery/Fetch.ai pipeline is implemented.
 """
 
 import numpy as np

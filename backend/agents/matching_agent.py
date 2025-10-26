@@ -1,27 +1,44 @@
 """
-Matching Agent: Scores patients using Conway's similarity metrics.
+Matching Agent: Scores patients using Pattern Discovery's similarity metrics.
 
 Responsibilities:
 - Receives patient candidates from Discovery Agent
-- Scores each patient using Conway embedding similarity
+- Scores each patient using Pattern Discovery embedding similarity
 - Calculates eligibility score, enrollment probability
 - Generates match reasons and risk factors
 - Returns ranked list of patient matches
 
-Uses Conway's pre-computed embeddings for similarity calculation.
+Uses Pattern Discovery's pre-computed embeddings for similarity calculation.
 """
 
-from uagents import Agent, Context
+from uagents import Agent, Context, Protocol
 import logging
 import time
 import numpy as np
 import sys
 import os
+from datetime import datetime
+from uuid import uuid4
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import Fetch.AI official chat protocol
+from uagents_core.contrib.protocols.chat import (
+    ChatMessage,
+    ChatAcknowledgement,
+    TextContent,
+    chat_protocol_spec
+)
+
 from agents.models import MatchingRequest, MatchingResponse, AgentStatus
 from agents.config import AgentConfig, AgentRegistry
+from agentverse_config import (
+    get_agent_address,
+    is_agentverse_mode,
+    get_agents_to_talk_to,
+    validate_configuration
+)
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,21 +46,58 @@ logger = logging.getLogger(__name__)
 config = AgentConfig.get_agent_config("matching")
 agent = Agent(**config)
 
+# Initialize the official Fetch.AI chat protocol
+chat_proto = Protocol(spec=chat_protocol_spec)
+
 agent_state = {
     "requests_processed": 0,
-    "start_time": time.time()
+    "start_time": time.time(),
+    "agentverse_addresses": {},
+    "is_agentverse": False,
+    "coordinator_address": None
 }
 
 
 @agent.on_event("startup")
 async def startup(ctx: Context):
-    logger.info(f"✓ Matching Agent started: {agent.address}")
-    AgentRegistry.register("matching", agent.address)
+    logger.info(f"✓ Matching Agent started: {ctx.agent.address}")
+    AgentRegistry.register("matching", ctx.agent.address)
+    
 
+    # Check if running in Agentverse mode
+    agent_state["is_agentverse"] = is_agentverse_mode()
+
+    if agent_state["is_agentverse"]:
+        logger.info("🌐 Running in AGENTVERSE MODE")
+
+        # Get coordinator address
+        coordinator_addr = get_agent_address("coordinator")
+        if coordinator_addr:
+            agent_state["coordinator_address"] = coordinator_addr
+            logger.info(f"  ✓ Loaded coordinator address: {coordinator_addr[:20]}...")
+
+            # Send greeting to coordinator
+            try:
+                greeting = ChatMessage(
+                    timestamp=datetime.utcnow(),
+                    msg_id=uuid4(),
+                    content=[TextContent(
+                        type="text",
+                        text="Hello from Matching Agent! Ready to score patient candidates using Pattern Discovery similarity metrics!"
+                    )]
+                )
+                await ctx.send(coordinator_addr, greeting)
+                logger.info(f"  ✓ Sent greeting to coordinator")
+            except Exception as e:
+                logger.error(f"  ❌ Failed to send greeting to coordinator: {e}")
+        else:
+            logger.warning(f"  ⚠ Missing coordinator address - update agentverse_config.py")
+    else:
+        logger.info("🏠 Running in LOCAL MODE")
 
 @agent.on_message(model=MatchingRequest)
 async def handle_matching_request(ctx: Context, sender: str, msg: MatchingRequest):
-    """Score patients using Conway similarity metrics"""
+    """Score patients using Pattern Discovery similarity metrics"""
     logger.info(f"  → Matching Agent scoring {len(msg.candidates)} candidates for: {msg.trial_id}")
 
     try:
@@ -79,11 +133,11 @@ async def handle_matching_request(ctx: Context, sender: str, msg: MatchingReques
 
 def score_candidates(candidates: list, criteria: dict, patterns: list) -> list:
     """
-    Score each candidate using Conway similarity metrics.
+    Score each candidate using Pattern Discovery similarity metrics.
 
     Scoring components:
     1. Eligibility score: How well patient meets criteria
-    2. Similarity score: Conway embedding distance to pattern centroid
+    2. Similarity score: Pattern Discovery embedding distance to pattern centroid
     3. Enrollment probability: Based on pattern success rate
     4. Overall score: Weighted combination
     """
@@ -105,7 +159,7 @@ def score_candidates(candidates: list, criteria: dict, patterns: list) -> list:
         # Calculate eligibility score (0-1)
         eligibility_score = calculate_eligibility_score(demographics, clinical_data, criteria)
 
-        # Calculate similarity score using Conway embeddings (0-1)
+        # Calculate similarity score using Pattern Discovery embeddings (0-1)
         candidate_embedding = candidate.get("embedding", [])
         pattern_centroid = pattern.get("centroid", [])
         similarity_score = calculate_similarity(candidate_embedding, pattern_centroid)
@@ -270,6 +324,41 @@ async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
         requests_processed=agent_state["requests_processed"],
         metadata={}
     ))
+
+
+# ============================================================================
+# CHAT PROTOCOL HANDLER (Official Fetch.AI)
+# ============================================================================
+
+@chat_proto.on_message(ChatMessage)
+async def handle_chat_message(ctx: Context, sender: str, msg: ChatMessage):
+    """Handle incoming chat messages using official Fetch.AI protocol"""
+    for item in msg.content:
+        if isinstance(item, TextContent):
+            # Log received message
+            logger.info(f"💬 Matching Agent received chat message from {sender}: {item.text}")
+
+            # Send acknowledgment
+            ack = ChatAcknowledgement(
+                timestamp=datetime.utcnow(),
+                acknowledged_msg_id=msg.msg_id
+            )
+            await ctx.send(sender, ack)
+
+            # NOTE: We don't send a response ChatMessage to avoid infinite loops.
+            # Actual work requests should use specific message types (EligibilityRequest, etc.),
+            # not ChatMessage.
+            agent_state["requests_processed"] += 1
+
+
+@chat_proto.on_message(ChatAcknowledgement)
+async def handle_acknowledgement(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    """Handle chat acknowledgements"""
+    logger.info(f"✓ Matching received acknowledgement from {sender} for message: {msg.acknowledged_msg_id}")
+
+
+# Include chat protocol in agent
+agent.include(chat_proto, publish_manifest=True)
 
 
 if __name__ == "__main__":

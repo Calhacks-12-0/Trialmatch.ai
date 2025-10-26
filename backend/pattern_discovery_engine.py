@@ -10,10 +10,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class ConwayPatternEngine:
+class PatternDiscoveryEngine:
     """
-    Conway-style unsupervised pattern discovery engine.
-    Discovers hidden patterns in clinical data without labels.
+    Unsupervised pattern discovery engine for clinical trial matching.
+    Uses machine learning to discover hidden patient clusters without labels.
+
+    Key Features:
+    - Discovers natural patient groups using UMAP + HDBSCAN clustering
+    - Matches patient clusters to trial eligibility criteria
+    - Calculates similarity scores for patient-trial matching
     """
     
     def __init__(self):
@@ -151,23 +156,31 @@ class ConwayPatternEngine:
                 cluster_mask = self.cluster_labels == cluster_id
                 cluster_embeddings = self.original_embeddings[cluster_mask]
 
-                # Calculate average similarity between trial and cluster patients
-                # Compare trial text embedding to the text portion of patient embeddings
-                text_embedding_size = len(trial_text_embedding)
-                patient_text_embeddings = cluster_embeddings[:, :text_embedding_size]
+                if len(cluster_embeddings) > 0:
+                    # Calculate average similarity between trial and cluster patients
+                    # Compare trial text embedding to the text portion of patient embeddings
+                    text_embedding_size = len(trial_text_embedding)
+                    patient_text_embeddings = cluster_embeddings[:, :text_embedding_size]
 
-                # Calculate cosine similarities
-                trial_norm = trial_text_embedding / (np.linalg.norm(trial_text_embedding) + 1e-10)
-                patient_norms = patient_text_embeddings / (np.linalg.norm(patient_text_embeddings, axis=1, keepdims=True) + 1e-10)
+                    # Calculate cosine similarities
+                    trial_norm = trial_text_embedding / (np.linalg.norm(trial_text_embedding) + 1e-10)
+                    patient_norms = patient_text_embeddings / (np.linalg.norm(patient_text_embeddings, axis=1, keepdims=True) + 1e-10)
 
-                cosine_sims = np.dot(patient_norms, trial_norm)
-                avg_similarity = np.mean(cosine_sims)
+                    cosine_sims = np.dot(patient_norms, trial_norm)
+                    avg_similarity = np.mean(cosine_sims)
 
-                # Convert cosine similarity (-1 to 1) to score (0 to 1)
-                similarity = (avg_similarity + 1) / 2
+                    # Convert cosine similarity (-1 to 1) to score (0 to 1)
+                    similarity = (avg_similarity + 1) / 2
+
+                    logger.info(f"Pattern {pattern['pattern_id']}: similarity={similarity:.3f}, size={pattern['size']}")
+                else:
+                    # Empty cluster
+                    similarity = 0.6
+                    logger.warning(f"Pattern {pattern['pattern_id']}: empty cluster, using fallback")
             else:
                 # Fallback if original embeddings not stored
                 similarity = 0.6
+                logger.warning(f"Pattern {pattern['pattern_id']}: embeddings not available, using fallback")
 
             # Adjust based on cluster cohesion (tighter clusters = more reliable predictions)
             cohesion_factor = pattern.get('enrollment_success_rate', 0.7)

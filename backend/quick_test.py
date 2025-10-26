@@ -31,7 +31,7 @@ except Exception as e:
 
 print()
 
-# Test 3: Patterns (this triggers Conway for first time)
+# Test 3: Patterns (this triggers Pattern Discovery for first time)
 print("3. Testing /api/patterns (this will take 10-30 seconds on first run)...")
 print("   Loading ML model and processing 5,000 patients...")
 start = time.time()

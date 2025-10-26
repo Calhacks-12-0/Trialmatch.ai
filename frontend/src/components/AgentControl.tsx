@@ -3,15 +3,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, MessageCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
+import AgentChat from "./AgentChat";
 
 const agents = [
-  { id: 1, name: "Screening Agent", status: "Processing", x: 50, y: 20 },
-  { id: 2, name: "Matching Agent", status: "Complete", x: 20, y: 50 },
-  { id: 3, name: "Analytics Agent", status: "Idle", x: 80, y: 50 },
-  { id: 4, name: "Reporting Agent", status: "Processing", x: 35, y: 80 },
-  { id: 5, name: "Compliance Agent", status: "Complete", x: 65, y: 80 },
-  { id: 6, name: "Coordinator", status: "Processing", x: 50, y: 50, isCenter: true },
+  { id: 1, name: "Discovery Agent", key: "discovery", status: "Processing", x: 50, y: 20 },
+  { id: 2, name: "Matching Agent", key: "matching", status: "Complete", x: 20, y: 50 },
+  { id: 3, name: "Pattern Agent", key: "pattern", status: "Processing", x: 80, y: 50 },
+  { id: 4, name: "Site Agent", key: "site", status: "Processing", x: 35, y: 80 },
+  { id: 5, name: "Prediction Agent", key: "prediction", status: "Complete", x: 65, y: 80 },
+  { id: 6, name: "Eligibility Agent", key: "eligibility", status: "Processing", x: 15, y: 20 },
+  { id: 7, name: "Validation Agent", key: "validation", status: "Complete", x: 85, y: 20 },
+  { id: 8, name: "Coordinator", key: "coordinator", status: "Processing", x: 50, y: 50, isCenter: true },
 ];
 
 const recentQueries = [
@@ -105,7 +115,7 @@ export default function AgentControl() {
               >
                 <div
                   className={`${
-                    agent.isCenter ? "w-32 h-32" : "w-24 h-24"
+                    agent.isCenter ? "w-40 h-40" : "w-28 h-28"
                   } relative flex items-center justify-center`}
                 >
                   {/* Hexagon */}
@@ -124,10 +134,34 @@ export default function AgentControl() {
                           animation: agent.status === "Processing" ? "pulse 2s infinite" : "none",
                         }}
                       ></div>
-                      <p className={`text-xs ${agent.isCenter ? "" : "text-xs"}`}>
+                      <p className={`text-xs ${agent.isCenter ? "font-semibold" : ""}`}>
                         {agent.name.replace(" Agent", "")}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">{agent.status}</p>
+
+                      {/* Chat Button */}
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 h-7 px-2 text-xs"
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                          >
+                            <MessageCircle className="w-3 h-3 mr-1" />
+                            Chat
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Chat with {agent.name}</DialogTitle>
+                          </DialogHeader>
+                          <AgentChat
+                            agentName={agent.key}
+                            agentDisplayName={agent.name}
+                          />
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   </div>
                 </div>

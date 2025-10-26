@@ -242,7 +242,7 @@ export default function SiteSelection() {
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded-full bg-[#0B5394] opacity-20"></div>
-                      <span className="text-xs">Low (<500)</span>
+                      <span className="text-xs">Low (&lt;500)</span>
                     </div>
                   </div>
                 </div>

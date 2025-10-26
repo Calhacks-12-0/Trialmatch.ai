@@ -3,7 +3,7 @@ from typing import Dict, List, Any
 import json
 from datetime import datetime
 from data_loader import ClinicalDataLoader
-from conway_engine import ConwayPatternEngine
+from pattern_discovery_engine import PatternDiscoveryEngine
 import requests
 import logging
 import numpy as np
@@ -34,12 +34,12 @@ def convert_numpy_types(obj):
 class TrialMatchIntegrationService:
     """
     Main integration service that coordinates data flow:
-    Data Layer → Conway Pattern Discovery → Fetch.ai Agents
+    Data Layer → Pattern Discovery → Fetch.ai Agents
     """
-    
+
     def __init__(self):
         self.data_loader = ClinicalDataLoader()
-        self.conway_engine = ConwayPatternEngine()
+        self.pattern_engine = PatternDiscoveryEngine()
         self.agent_url = "http://localhost:8000"
         self.processing_stats = {}
         
@@ -85,22 +85,22 @@ class TrialMatchIntegrationService:
         # Load patient data (Synthea or synthetic)
         data = self.data_loader.prepare_for_conway(use_synthea=use_synthea, max_patients=max_patients)
 
-        # Step 2: Conway pattern discovery (unsupervised)
-        logger.info("Step 2: Running Conway pattern discovery...")
-        embeddings = self.conway_engine.create_universal_embedding(data)
-        pattern_results = self.conway_engine.discover_patterns(embeddings)
+        # Step 2: Pattern discovery (unsupervised)
+        logger.info("Step 2: Running Pattern discovery...")
+        embeddings = self.pattern_engine.create_universal_embedding(data)
+        pattern_results = self.pattern_engine.discover_patterns(embeddings)
 
         # Step 3: Get pattern insights
-        insights = self.conway_engine.get_pattern_insights()
+        insights = self.pattern_engine.get_pattern_insights()
 
         # Step 4: Match patterns to specific trial
         if trial_id:
             trials = data['trials']
             trial = next((t for t in trials if t['nct_id'] == trial_id), trials[0])
-            trial_matches = self.conway_engine.match_to_trial(trial, pattern_results['patterns'])
+            trial_matches = self.pattern_engine.match_to_trial(trial, pattern_results['patterns'])
         else:
             trial = data['trials'][0] if data['trials'] else None
-            trial_matches = self.conway_engine.match_to_trial(trial, pattern_results['patterns'])
+            trial_matches = self.pattern_engine.match_to_trial(trial, pattern_results['patterns'])
         
         # Step 5: Send to Fetch.ai agents for orchestration
         logger.info("Step 3: Sending to Fetch.ai agents...")

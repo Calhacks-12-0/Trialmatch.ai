@@ -3,7 +3,7 @@ Prediction Agent: Forecasts enrollment timeline using pattern analysis.
 
 Responsibilities:
 - Receives matched patients and site recommendations
-- Uses Conway pattern success rates for prediction
+- Uses patient pattern success rates for prediction
 - Forecasts enrollment timeline and milestones
 - Identifies risk factors and optimization opportunities
 - Returns enrollment forecast with confidence intervals
@@ -11,17 +11,34 @@ Responsibilities:
 Uses historical pattern data to predict future enrollment.
 """
 
-from uagents import Agent, Context
+from uagents import Agent, Context, Protocol
 import logging
 import time
 import numpy as np
 import sys
 import os
+from datetime import datetime
+from uuid import uuid4
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import Fetch.AI official chat protocol
+from uagents_core.contrib.protocols.chat import (
+    ChatMessage,
+    ChatAcknowledgement,
+    TextContent,
+    chat_protocol_spec
+)
+
 from agents.models import PredictionRequest, EnrollmentForecast, AgentStatus
 from agents.config import AgentConfig, AgentRegistry
+from agentverse_config import (
+    get_agent_address,
+    is_agentverse_mode,
+    get_agents_to_talk_to,
+    validate_configuration
+)
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,17 +46,54 @@ logger = logging.getLogger(__name__)
 config = AgentConfig.get_agent_config("prediction")
 agent = Agent(**config)
 
+# Initialize the official Fetch.AI chat protocol
+chat_proto = Protocol(spec=chat_protocol_spec)
+
 agent_state = {
     "requests_processed": 0,
-    "start_time": time.time()
+    "start_time": time.time(),
+    "agentverse_addresses": {},
+    "is_agentverse": False,
+    "coordinator_address": None
 }
 
 
 @agent.on_event("startup")
 async def startup(ctx: Context):
-    logger.info(f"✓ Prediction Agent started: {agent.address}")
-    AgentRegistry.register("prediction", agent.address)
+    logger.info(f"✓ Prediction Agent started: {ctx.agent.address}")
+    AgentRegistry.register("prediction", ctx.agent.address)
+    
 
+    # Check if running in Agentverse mode
+    agent_state["is_agentverse"] = is_agentverse_mode()
+
+    if agent_state["is_agentverse"]:
+        logger.info("🌐 Running in AGENTVERSE MODE")
+
+        # Get coordinator address
+        coordinator_addr = get_agent_address("coordinator")
+        if coordinator_addr:
+            agent_state["coordinator_address"] = coordinator_addr
+            logger.info(f"  ✓ Loaded coordinator address: {coordinator_addr[:20]}...")
+
+            # Send greeting to coordinator
+            try:
+                greeting = ChatMessage(
+                    timestamp=datetime.utcnow(),
+                    msg_id=uuid4(),
+                    content=[TextContent(
+                        type="text",
+                        text="Hello from Prediction Agent! Ready to forecast enrollment timelines using pattern analysis!"
+                    )]
+                )
+                await ctx.send(coordinator_addr, greeting)
+                logger.info(f"  ✓ Sent greeting to coordinator")
+            except Exception as e:
+                logger.error(f"  ❌ Failed to send greeting to coordinator: {e}")
+        else:
+            logger.warning(f"  ⚠ Missing coordinator address - update agentverse_config.py")
+    else:
+        logger.info("🏠 Running in LOCAL MODE")
 
 @agent.on_message(model=PredictionRequest)
 async def handle_prediction_request(ctx: Context, sender: str, msg: PredictionRequest):
@@ -78,7 +132,7 @@ async def handle_prediction_request(ctx: Context, sender: str, msg: PredictionRe
 
 def generate_forecast(target: int, matches: list, patterns: list, sites: list) -> dict:
     """
-    Generate enrollment forecast using Conway pattern analysis.
+    Generate enrollment forecast using patient pattern analysis.
 
     Methodology:
     1. Calculate average enrollment probability from patterns
@@ -224,6 +278,41 @@ async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
         requests_processed=agent_state["requests_processed"],
         metadata={}
     ))
+
+
+# ============================================================================
+# CHAT PROTOCOL HANDLER (Official Fetch.AI)
+# ============================================================================
+
+@chat_proto.on_message(ChatMessage)
+async def handle_chat_message(ctx: Context, sender: str, msg: ChatMessage):
+    """Handle incoming chat messages using official Fetch.AI protocol"""
+    for item in msg.content:
+        if isinstance(item, TextContent):
+            # Log received message
+            logger.info(f"💬 Prediction Agent received chat message from {sender}: {item.text}")
+
+            # Send acknowledgment
+            ack = ChatAcknowledgement(
+                timestamp=datetime.utcnow(),
+                acknowledged_msg_id=msg.msg_id
+            )
+            await ctx.send(sender, ack)
+
+            # NOTE: We don't send a response ChatMessage to avoid infinite loops.
+            # Actual work requests should use specific message types (EligibilityRequest, etc.),
+            # not ChatMessage.
+            agent_state["requests_processed"] += 1
+
+
+@chat_proto.on_message(ChatAcknowledgement)
+async def handle_acknowledgement(ctx: Context, sender: str, msg: ChatAcknowledgement):
+    """Handle chat acknowledgements"""
+    logger.info(f"✓ Prediction received acknowledgement from {sender} for message: {msg.acknowledged_msg_id}")
+
+
+# Include chat protocol in agent
+agent.include(chat_proto, publish_manifest=True)
 
 
 if __name__ == "__main__":
