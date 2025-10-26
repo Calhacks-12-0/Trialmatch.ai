@@ -42,6 +42,13 @@ import {
   Database,
   Plus,
   Loader2,
+  GitBranch,
+  CheckCircle,
+  Sparkles,
+  UserSearch,
+  TrendingUp,
+  Building2,
+  Calendar,
 } from "lucide-react";
 
 export default function App() {
@@ -56,7 +63,8 @@ export default function App() {
 
     setIsLoading(true);
     try {
-      const response = await fetch("http://localhost:8080/api/match/trial", {
+      // Use full agent pipeline with Conway pattern discovery
+      const response = await fetch("http://localhost:8080/api/match/trial/agents", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -175,7 +183,7 @@ export default function App() {
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Matching...
+                      Running Agent Pipeline...
                     </>
                   ) : (
                     "Match Patients"
@@ -924,42 +932,240 @@ function PatternsView() {
 
 // Agents View
 function AgentsView() {
-  const agents = [
-    { name: "Eligibility Agent", status: "Active", tasks: 234 },
-    { name: "Matching Agent", status: "Active", tasks: 189 },
-    { name: "Data Mining Agent", status: "Active", tasks: 156 },
-    {
-      name: "Site Selection Agent",
-      status: "Active",
-      tasks: 98,
+  const [agentStatuses, setAgentStatuses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Static agent metadata
+  const agentMetadata: Record<string, any> = {
+    "Coordinator Agent": {
+      description: "Orchestrates the entire multi-agent workflow",
+      role: "Workflow Orchestration",
+      icon: GitBranch,
+      color: "#6B46C1"
     },
-  ];
+    "Eligibility Agent": {
+      description: "Extracts trial eligibility criteria using structured parsing",
+      role: "Criteria Extraction",
+      icon: CheckCircle,
+      color: "#0B5394"
+    },
+    "Pattern Agent": {
+      description: "Matches Conway patterns to trial requirements",
+      role: "Pattern Matching",
+      icon: Sparkles,
+      color: "#6B46C1"
+    },
+    "Discovery Agent": {
+      description: "Searches patient database for candidates matching Conway patterns",
+      role: "Patient Discovery",
+      icon: UserSearch,
+      color: "#0B5394"
+    },
+    "Matching Agent": {
+      description: "Scores patients using Conway's similarity metrics",
+      role: "Patient Scoring",
+      icon: TrendingUp,
+      color: "#52C41A"
+    },
+    "Site Agent": {
+      description: "Recommends trial sites based on patient geography",
+      role: "Site Selection",
+      icon: Building2,
+      color: "#0B5394"
+    },
+    "Prediction Agent": {
+      description: "Forecasts enrollment timeline using pattern analysis",
+      role: "Timeline Prediction",
+      icon: Calendar,
+      color: "#6B46C1"
+    },
+  };
+
+  // Fetch agent status from backend
+  useEffect(() => {
+    const fetchAgentStatus = async () => {
+      try {
+        const response = await fetch("http://localhost:8080/api/agents/status");
+        const data = await response.json();
+
+        // Merge backend status with frontend metadata
+        const mergedAgents = data.agents.map((agent: any) => ({
+          ...agent,
+          ...agentMetadata[agent.name]
+        }));
+
+        setAgentStatuses(mergedAgents);
+      } catch (error) {
+        console.error("Failed to fetch agent status:", error);
+        // Fallback to offline status for all agents
+        setAgentStatuses(
+          Object.keys(agentMetadata).map(name => ({
+            name,
+            status: "offline",
+            port: 0,
+            ...agentMetadata[name]
+          }))
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAgentStatus();
+
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchAgentStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const agents = agentStatuses;
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>AI Agent Control Center</CardTitle>
+          <CardTitle>Fetch.ai Agent Network</CardTitle>
+          <p className="text-sm text-gray-500 mt-2">
+            7 specialized agents working together with Conway Pattern Discovery
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {agents.map((agent) => (
-              <div
-                key={agent.name}
-                className="p-4 bg-gradient-to-br from-[#6B46C1]/10 to-transparent rounded-lg border border-[#6B46C1]/20"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-[#52C41A]" />
-                  <span className="text-xs text-gray-500">
-                    {agent.status}
-                  </span>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-[#6B46C1]" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {agents.map((agent) => {
+                const IconComponent = agent.icon;
+                const isActive = agent.status === 'active';
+                return (
+                  <div
+                    key={agent.name}
+                    className="p-4 bg-gradient-to-br from-[#6B46C1]/5 to-transparent rounded-lg border border-[#6B46C1]/20 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div
+                        className="p-2 rounded-lg flex-shrink-0"
+                        style={{ backgroundColor: `${agent.color}15` }}
+                      >
+                        <IconComponent
+                          className="w-5 h-5"
+                          style={{ color: agent.color }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <div
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              isActive
+                                ? 'bg-[#52C41A] animate-pulse'
+                                : 'bg-gray-400'
+                            }`}
+                          />
+                          <span className={`text-xs font-medium ${
+                            isActive ? 'text-[#52C41A]' : 'text-gray-500'
+                          }`}>
+                            {isActive ? 'Active' : 'Offline'}
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-sm truncate">{agent.name}</h3>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-[#6B46C1] bg-purple-50 px-2 py-1 rounded inline-block">
+                        {agent.role}
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">
+                        {agent.description}
+                      </p>
+                      {agent.port && (
+                        <p className="text-xs text-gray-400">
+                          Port: {agent.port}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Agent Workflow Pipeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent Workflow Pipeline</CardTitle>
+          <p className="text-sm text-gray-500 mt-2">
+            How the agent network processes clinical trial matching requests
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Main Pipeline Flow */}
+            <div className="flex flex-col md:flex-row items-center justify-center gap-3 p-6 bg-gradient-to-r from-purple-50 via-blue-50 to-green-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#6B46C1]">
+                    <Search className="w-7 h-7 text-[#6B46C1]" />
+                  </div>
+                  <span className="text-xs font-medium mt-2">Trial Query</span>
                 </div>
-                <h3 className="mb-1">{agent.name}</h3>
-                <p className="text-sm text-gray-500">
-                  {agent.tasks} tasks completed
-                </p>
+                <span className="text-2xl text-gray-400 hidden md:block">→</span>
               </div>
-            ))}
+
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#0B5394]">
+                    <Sparkles className="w-7 h-7 text-[#0B5394]" />
+                  </div>
+                  <span className="text-xs font-medium mt-2">Conway Engine</span>
+                </div>
+                <span className="text-2xl text-gray-400 hidden md:block">→</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#6B46C1]">
+                    <GitBranch className="w-7 h-7 text-[#6B46C1]" />
+                  </div>
+                  <span className="text-xs font-medium mt-2">Agent Network</span>
+                </div>
+                <span className="text-2xl text-gray-400 hidden md:block">→</span>
+              </div>
+
+              <div className="flex flex-col items-center">
+                <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#52C41A]">
+                  <Users className="w-7 h-7 text-[#52C41A]" />
+                </div>
+                <span className="text-xs font-medium mt-2">Patient Matches</span>
+              </div>
+            </div>
+
+            {/* Agent Execution Order */}
+            <div className="pt-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-4">Sequential Agent Execution:</h4>
+              <div className="space-y-3">
+                {agents.slice(1).map((agent, idx) => {
+                  const IconComponent = agent.icon;
+                  return (
+                    <div key={agent.name} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#6B46C1] text-white text-sm font-bold flex-shrink-0">
+                        {idx + 1}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <IconComponent className="w-4 h-4" style={{ color: agent.color }} />
+                        <span className="font-medium text-sm">{agent.name}</span>
+                      </div>
+                      <div className="hidden md:block text-xs text-gray-500 ml-auto">
+                        {agent.role}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -974,11 +1180,11 @@ function MatchesView({ allTrialResults }: { allTrialResults: any[] }) {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Clinical Trial Matches</CardTitle>
+          <CardTitle>Clinical Trial Matches (Agent Pipeline)</CardTitle>
           <p className="text-sm text-gray-500 mt-2">
             {allTrialResults.length > 0
-              ? `${allTrialResults.length} trial${allTrialResults.length > 1 ? 's' : ''} matched. Click on any trial to view patient matches.`
-              : "No trials added yet. Click 'Add Trial' to match patients to a clinical trial."}
+              ? `${allTrialResults.length} trial${allTrialResults.length > 1 ? 's' : ''} matched using Conway Pattern Discovery + 7 Fetch.ai Agents. Click on any trial to view details.`
+              : "No trials added yet. Click 'Add Trial' to match patients using the full agent pipeline."}
           </p>
         </CardHeader>
       </Card>
@@ -994,21 +1200,23 @@ function MatchesView({ allTrialResults }: { allTrialResults: any[] }) {
         </Card>
       ) : (
         allTrialResults.map((trialResult, index) => {
-          const isExpanded = expandedTrialId === trialResult.trial_info.nct_id;
+          // Get trial ID from either trial_info or trial_matches
+          const trialId = trialResult.trial_info?.nct_id || trialResult.trial_matches?.trial_id || `trial-${index}`;
+          const isExpanded = expandedTrialId === trialId;
 
           return (
             <Card
-              key={trialResult.trial_info.nct_id + index}
+              key={trialId + index}
               className="border-l-4 border-l-[#0B5394] cursor-pointer hover:shadow-md transition-shadow"
               onClick={() =>
-                setExpandedTrialId(isExpanded ? null : trialResult.trial_info.nct_id)
+                setExpandedTrialId(isExpanded ? null : trialId)
               }
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <CardTitle className="text-lg">{trialResult.trial_info.title}</CardTitle>
+                      <CardTitle className="text-lg">{trialResult.trial_info?.title || trialResult.trial_matches?.[0]?.trial_id || 'Clinical Trial'}</CardTitle>
                       <span className="text-xs text-gray-400">
                         {isExpanded ? "▼" : "▶"}
                       </span>
@@ -1016,51 +1224,135 @@ function MatchesView({ allTrialResults }: { allTrialResults: any[] }) {
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-500">Trial ID:</span>
-                        <span className="font-medium">{trialResult.trial_info.nct_id}</span>
+                        <span className="font-medium">{trialResult.trial_info?.nct_id || 'N/A'}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-500">Condition:</span>
-                        <span>{trialResult.trial_info.condition}</span>
+                        <span className="text-gray-500">Processing Time:</span>
+                        <span className="text-[#6B46C1] font-medium">{trialResult.processing_time || 'N/A'}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-500">Phase:</span>
-                        <span>{trialResult.trial_info.phase}</span>
+                        <span className="text-gray-500">Patterns Found:</span>
+                        <span className="font-medium">{trialResult.statistics?.patterns_discovered || 0}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-500">Date Added:</span>
-                        <span>{new Date(trialResult.date_added).toLocaleDateString()}</span>
+                        <span className="text-gray-500">Agents Used:</span>
+                        <span className="text-[#6B46C1] font-medium">7 Agents</span>
                       </div>
                     </div>
+
+                    {/* Agent Results Badge */}
+                    {trialResult.agent_results && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="px-2 py-1 bg-purple-50 rounded text-xs">
+                          <span className="text-gray-600">Confidence: </span>
+                          <span className="font-semibold text-[#6B46C1]">
+                            {Math.round((trialResult.agent_results.confidence_score || 0) * 100)}%
+                          </span>
+                        </div>
+                        <div className="px-2 py-1 bg-blue-50 rounded text-xs">
+                          <span className="text-gray-600">Timeline: </span>
+                          <span className="font-semibold text-[#0B5394]">
+                            {trialResult.agent_results.predicted_enrollment_timeline || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="px-2 py-1 bg-green-50 rounded text-xs">
+                          <span className="text-gray-600">Messages: </span>
+                          <span className="font-semibold text-[#52C41A]">
+                            {trialResult.agent_results.messages_processed || 0}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="px-4 py-2 bg-green-50 rounded-lg ml-4">
                     <div className="text-2xl font-bold text-[#52C41A]">
-                      {trialResult.total_matches}
+                      {trialResult.total_matches || trialResult.statistics?.clustered_patients || 0}
                     </div>
                     <div className="text-xs text-gray-600 whitespace-nowrap">Patients Matched</div>
                   </div>
                 </div>
               </CardHeader>
 
-              {/* Expanded Patient Matches */}
+              {/* Expanded Results */}
               {isExpanded && (
                 <CardContent className="border-t" onClick={(e) => e.stopPropagation()}>
-                  <h4 className="font-medium mb-4">Top 10 Matched Patients</h4>
+                  <h4 className="font-medium mb-4">Agent Pipeline Results</h4>
 
-                  {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 text-sm text-gray-500">Patient ID</th>
-                          <th className="text-left py-3 px-4 text-sm text-gray-500">Age</th>
-                          <th className="text-left py-3 px-4 text-sm text-gray-500">Condition</th>
-                          <th className="text-left py-3 px-4 text-sm text-gray-500">
-                            Match Score
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trialResult.matches.map((match: any) => (
+                  {/* Pattern Matches Grid */}
+                  {trialResult.trial_matches?.pattern_matches && trialResult.trial_matches.pattern_matches.length > 0 && (
+                    <div className="space-y-4 mb-6">
+                      <h5 className="text-sm font-medium">Pattern-Based Matches</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {trialResult.trial_matches.pattern_matches.slice(0, 6).map((pattern: any, idx: number) => (
+                          <div key={idx} className="p-4 bg-gradient-to-br from-purple-50 to-white rounded-lg border border-purple-100">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="font-semibold text-[#6B46C1]">{pattern.pattern_id}</span>
+                              <span className="text-xs px-2 py-1 bg-purple-100 rounded-full text-purple-700">
+                                {Math.round((pattern.similarity_score || 0) * 100)}% match
+                              </span>
+                            </div>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Potential Patients:</span>
+                                <span className="font-medium">{pattern.potential_patients || 0}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Predicted Enrollment:</span>
+                                <span className="font-medium text-[#52C41A]">{pattern.predicted_enrollment || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pattern Insights */}
+                  {trialResult.pattern_insights && trialResult.pattern_insights.length > 0 && (
+                    <div className="space-y-2">
+                      <h5 className="text-sm font-medium">Pattern Insights</h5>
+                      {trialResult.pattern_insights.slice(0, 3).map((insight: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                          <div className="font-medium text-sm text-[#0B5394] mb-1">
+                            {insight.pattern_id}
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            {insight.description}
+                          </div>
+                          {insight.key_features && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {insight.key_features.map((feature: string, fIdx: number) => (
+                                <span key={fIdx} className="text-xs px-2 py-0.5 bg-white rounded border border-blue-200">
+                                  {feature}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* If old format (matches array) - show that */}
+                  {trialResult.matches && trialResult.matches.length > 0 && (
+                    <>
+                      <h4 className="font-medium mb-4 mt-6">Top Patient Matches</h4>
+
+                      {/* Desktop Table */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-3 px-4 text-sm text-gray-500">Patient ID</th>
+                              <th className="text-left py-3 px-4 text-sm text-gray-500">Age</th>
+                              <th className="text-left py-3 px-4 text-sm text-gray-500">Condition</th>
+                              <th className="text-left py-3 px-4 text-sm text-gray-500">
+                                Match Score
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trialResult.matches.map((match: any) => (
                           <tr
                             key={match.patient_id}
                             className="border-b border-gray-100 hover:bg-gray-50"
@@ -1113,6 +1405,8 @@ function MatchesView({ allTrialResults }: { allTrialResults: any[] }) {
                       </div>
                     ))}
                   </div>
+                </>
+                  )}
                 </CardContent>
               )}
             </Card>
