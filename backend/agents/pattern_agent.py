@@ -43,8 +43,8 @@ async def startup(ctx: Context):
     # Patterns will be loaded from context storage when needed
 
 
-@agent.on_query(model=PatternRequest, replies={PatternResponse})
-async def handle_pattern_request(ctx: Context, sender: str, msg: PatternRequest) -> PatternResponse:
+@agent.on_message(model=PatternRequest)
+async def handle_pattern_request(ctx: Context, sender: str, msg: PatternRequest):
     """Find Conway patterns matching trial eligibility criteria"""
     logger.info(f"  → Pattern Agent matching patterns for: {msg.trial_id}")
 
@@ -59,12 +59,13 @@ async def handle_pattern_request(ctx: Context, sender: str, msg: PatternRequest)
 
         if not conway_patterns:
             logger.warning("No Conway patterns available - returning empty")
-            return PatternResponse(
+            await ctx.send(sender, PatternResponse(
                 trial_id=msg.trial_id,
                 patterns=[],
                 total_patterns=0,
                 conway_metadata={"warning": "No patterns available"}
-            )
+            ))
+            return
 
         # Match patterns to criteria
         criteria = msg.criteria
@@ -73,7 +74,7 @@ async def handle_pattern_request(ctx: Context, sender: str, msg: PatternRequest)
         agent_state["requests_processed"] += 1
         logger.info(f"  ✓ Found {len(matching_patterns)} matching patterns from {len(conway_patterns)} total")
 
-        return PatternResponse(
+        await ctx.send(sender, PatternResponse(
             trial_id=msg.trial_id,
             patterns=matching_patterns,
             total_patterns=len(matching_patterns),
@@ -81,16 +82,16 @@ async def handle_pattern_request(ctx: Context, sender: str, msg: PatternRequest)
                 "total_conway_patterns": len(conway_patterns),
                 "min_pattern_size": msg.min_pattern_size
             }
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error in pattern matching: {e}")
-        return PatternResponse(
+        await ctx.send(sender, PatternResponse(
             trial_id=msg.trial_id,
             patterns=[],
             total_patterns=0,
             conway_metadata={"error": str(e)}
-        )
+        ))
 
 
 def match_patterns_to_criteria(patterns: list, criteria: dict, min_size: int) -> list:
@@ -150,16 +151,16 @@ def match_patterns_to_criteria(patterns: list, criteria: dict, min_size: int) ->
     return matched[:20]  # Top 20 patterns
 
 
-@agent.on_query(model=AgentStatus, replies={AgentStatus})
-async def handle_status(ctx: Context, sender: str, msg: AgentStatus) -> AgentStatus:
-    return AgentStatus(
+@agent.on_message(model=AgentStatus)
+async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
+    await ctx.send(sender, AgentStatus(
         agent_name="pattern_agent",
         status="healthy",
         address=agent.address,
         uptime=time.time() - agent_state["start_time"],
         requests_processed=agent_state["requests_processed"],
         metadata={"patterns_available": len(agent_state.get("conway_patterns", []))}
-    )
+    ))
 
 
 if __name__ == "__main__":

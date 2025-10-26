@@ -8,6 +8,7 @@ import logging
 import os
 import glob
 from pathlib import Path
+from fhir_code_extractor import FHIRCodeExtractor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ class ClinicalDataLoader:
         self.synthea_data_path = os.path.join(os.path.dirname(__file__), 'data', 'fhir')
 
     def load_synthea_patients(self, max_patients: int = 1000) -> pd.DataFrame:
-        """Load real Synthea FHIR patient data"""
+        """Load real Synthea FHIR patient data with medical codes"""
         logger.info(f"Loading Synthea FHIR patient data from {self.synthea_data_path}...")
 
         if not os.path.exists(self.synthea_data_path):
@@ -32,47 +33,36 @@ class ClinicalDataLoader:
         # Get all JSON files in the Synthea directory
         patient_files = glob.glob(os.path.join(self.synthea_data_path, '*.json'))
 
-        # if not patient_files:
-        #     logger.warning("No Synthea patient files found, falling back to synthetic generation")
-        #     return self.generate_synthetic_patients(max_patients)
-
         logger.info(f"Found {len(patient_files)} Synthea patient files")
 
         # Limit the number of files to process
         patient_files = patient_files[:max_patients]
 
         patients = []
+        code_extractor = FHIRCodeExtractor()
 
         for idx, file_path in enumerate(patient_files):
             try:
                 with open(file_path, 'r') as f:
                     bundle = json.load(f)
 
-                # Extract patient resource and other resources from bundle
-                patient_resource = None
-                conditions = []
-                medications = []
-                observations = []
+                # Extract ALL medical codes from the bundle
+                extracted_codes = code_extractor.extract_all_codes_from_bundle(bundle)
 
+                # Extract patient resource from bundle
+                patient_resource = None
                 for entry in bundle.get('entry', []):
                     resource = entry.get('resource', {})
-                    resource_type = resource.get('resourceType')
-
-                    if resource_type == 'Patient':
+                    if resource.get('resourceType') == 'Patient':
                         patient_resource = resource
-                    elif resource_type == 'Condition':
-                        conditions.append(resource)
-                    elif resource_type == 'MedicationRequest':
-                        medications.append(resource)
-                    elif resource_type == 'Observation':
-                        observations.append(resource)
+                        break
 
                 if not patient_resource:
                     continue
 
-                # Parse patient data
-                patient_data = self._parse_synthea_patient(
-                    patient_resource, conditions, medications, observations
+                # Parse patient data WITH medical codes
+                patient_data = self._parse_synthea_patient_with_codes(
+                    patient_resource, extracted_codes
                 )
 
                 if patient_data:
@@ -85,14 +75,22 @@ class ClinicalDataLoader:
                 logger.warning(f"Error processing {file_path}: {e}")
                 continue
 
-        logger.info(f"Successfully loaded {len(patients)} Synthea patients")
+        logger.info(f"Successfully loaded {len(patients)} Synthea patients with medical codes")
 
         self.patients_df = pd.DataFrame(patients)
         return self.patients_df
 
-    def _parse_synthea_patient(self, patient: Dict, conditions: List[Dict],
-                               medications: List[Dict], observations: List[Dict]) -> Dict:
-        """Parse a Synthea FHIR patient resource into our format"""
+    def _parse_synthea_patient_with_codes(self, patient: Dict, extracted_codes: Dict) -> Dict:
+        """
+        Parse a Synthea FHIR patient resource with extracted medical codes.
+
+        Args:
+            patient: FHIR Patient resource
+            extracted_codes: Output from FHIRCodeExtractor.extract_all_codes_from_bundle()
+
+        Returns:
+            Patient data dict with condition_codes, observation_codes, medication_codes
+        """
         try:
             # Extract basic demographics
             patient_id = patient.get('id', 'unknown')
@@ -128,62 +126,58 @@ class ClinicalDataLoader:
                         elif 'longitude' in geo_ext.get('url', ''):
                             longitude = geo_ext.get('valueDecimal', longitude)
 
-            # Primary condition (most recent active condition)
+            # Extract medical codes from extracted_codes
+            condition_codes = extracted_codes.get('condition_codes', [])
+            observation_codes = extracted_codes.get('observation_codes', [])
+            medication_codes = extracted_codes.get('medication_codes', [])
+
+            # Get primary condition (use first condition code's display name for backward compatibility)
             primary_condition = 'healthy'
-            if conditions:
-                # Sort by onset date if available, otherwise use first condition
-                active_conditions = [c for c in conditions
-                                   if c.get('clinicalStatus', {}).get('coding', [{}])[0].get('code') == 'active']
-                if active_conditions:
-                    condition = active_conditions[0]
-                elif conditions:
-                    condition = conditions[0]
-                else:
-                    condition = None
+            if condition_codes:
+                primary_condition = condition_codes[0].get('display', 'unknown').lower()
 
-                if condition and 'code' in condition:
-                    coding = condition['code'].get('coding', [{}])[0]
-                    primary_condition = coding.get('display', 'unknown')
+            # Get SNOMED/ICD-10 codes for conditions
+            snomed_codes = [c['code'] for c in condition_codes if c.get('system') == 'SNOMED']
+            icd10_codes = [c['code'] for c in condition_codes if c.get('system') == 'ICD-10']
 
-            # Extract medications
-            med_list = []
-            for med in medications[:5]:  # Limit to 5 medications
-                if 'medicationCodeableConcept' in med:
-                    coding = med['medicationCodeableConcept'].get('coding', [{}])[0]
-                    med_name = coding.get('display', 'unknown')
-                    med_list.append(med_name.lower())
+            # Get LOINC codes for labs
+            loinc_codes = [c['code'] for c in observation_codes if c.get('system') == 'LOINC']
 
-            # Extract lab values from observations
+            # Get RxNorm codes for medications
+            rxnorm_codes = [c['code'] for c in medication_codes if c.get('system') == 'RxNorm']
+
+            # Medication names (for backward compatibility)
+            med_names = [c.get('display', 'unknown').lower() for c in medication_codes[:5]]
+
+            # Simulated lab values (would need to parse actual Observation values in production)
             lab_values = {
-                'hba1c': np.random.uniform(5.0, 10.0),  # Default random
+                'hba1c': np.random.uniform(5.0, 10.0),
                 'cholesterol': np.random.uniform(150, 300),
                 'blood_pressure': f"{np.random.randint(110, 180)}/{np.random.randint(70, 100)}"
             }
 
-            # Try to find actual lab values
-            for obs in observations:
-                code = obs.get('code', {})
-                coding = code.get('coding', [{}])[0]
-                code_display = coding.get('display', '').lower()
-
-                if 'hemoglobin a1c' in code_display or 'hba1c' in code_display:
-                    value = obs.get('valueQuantity', {}).get('value')
-                    if value:
-                        lab_values['hba1c'] = float(value)
-                elif 'cholesterol' in code_display:
-                    value = obs.get('valueQuantity', {}).get('value')
-                    if value:
-                        lab_values['cholesterol'] = float(value)
-
-            # Enrollment history (simulated based on conditions)
-            enrollment_history = min(len(conditions) // 2, 3)
+            # Enrollment history (simulated based on number of conditions)
+            enrollment_history = min(len(condition_codes) // 2, 3)
 
             return {
                 'patient_id': f'SYN{patient_id[:8]}',
                 'age': age,
                 'gender': gender,
-                'primary_condition': primary_condition.lower(),
-                'medications': med_list,
+                'primary_condition': primary_condition,  # Text for backward compatibility
+
+                # NEW: Medical codes
+                'condition_codes': condition_codes,      # Full code objects with system, code, display
+                'observation_codes': observation_codes,  # Lab test codes
+                'medication_codes': medication_codes,    # Medication codes
+
+                # NEW: Code-only lists for easy querying
+                'snomed_codes': snomed_codes,           # Just SNOMED code strings
+                'icd10_codes': icd10_codes,             # Just ICD-10 code strings
+                'loinc_codes': loinc_codes,             # Just LOINC code strings
+                'rxnorm_codes': rxnorm_codes,           # Just RxNorm code strings
+
+                # Backward compatibility
+                'medications': med_names,
                 'lab_values': lab_values,
                 'latitude': latitude,
                 'longitude': longitude,

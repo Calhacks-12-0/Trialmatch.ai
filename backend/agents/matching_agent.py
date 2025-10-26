@@ -41,8 +41,8 @@ async def startup(ctx: Context):
     AgentRegistry.register("matching", agent.address)
 
 
-@agent.on_query(model=MatchingRequest, replies={MatchingResponse})
-async def handle_matching_request(ctx: Context, sender: str, msg: MatchingRequest) -> MatchingResponse:
+@agent.on_message(model=MatchingRequest)
+async def handle_matching_request(ctx: Context, sender: str, msg: MatchingRequest):
     """Score patients using Conway similarity metrics"""
     logger.info(f"  → Matching Agent scoring {len(msg.candidates)} candidates for: {msg.trial_id}")
 
@@ -60,21 +60,21 @@ async def handle_matching_request(ctx: Context, sender: str, msg: MatchingReques
         agent_state["requests_processed"] += 1
         logger.info(f"  ✓ Scored {len(matches)} patients (avg score: {distribution.get('average', 0):.2f})")
 
-        return MatchingResponse(
+        await ctx.send(sender, MatchingResponse(
             trial_id=msg.trial_id,
             matches=matches,
             total_scored=len(matches),
             score_distribution=distribution
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error in patient matching: {e}")
-        return MatchingResponse(
+        await ctx.send(sender, MatchingResponse(
             trial_id=msg.trial_id,
             matches=[],
             total_scored=0,
             score_distribution={"error": str(e)}
-        )
+        ))
 
 
 def score_candidates(candidates: list, criteria: dict, patterns: list) -> list:
@@ -260,16 +260,16 @@ def calculate_distribution(matches: list) -> dict:
     }
 
 
-@agent.on_query(model=AgentStatus, replies={AgentStatus})
-async def handle_status(ctx: Context, sender: str, msg: AgentStatus) -> AgentStatus:
-    return AgentStatus(
+@agent.on_message(model=AgentStatus)
+async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
+    await ctx.send(sender, AgentStatus(
         agent_name="matching_agent",
         status="healthy",
         address=agent.address,
         uptime=time.time() - agent_state["start_time"],
         requests_processed=agent_state["requests_processed"],
         metadata={}
-    )
+    ))
 
 
 if __name__ == "__main__":

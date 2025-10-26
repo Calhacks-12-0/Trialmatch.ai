@@ -277,8 +277,8 @@ async def handle_user_query(
         )
 
 
-@agent.on_query(model=AgentStatus, replies={AgentStatus})
-async def handle_status(ctx: Context, sender: str, msg: AgentStatus) -> AgentStatus:
+@agent.on_message(model=AgentStatus)
+async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
     """Health check endpoint"""
     uptime = time.time() - agent_state["start_time"]
     return AgentStatus(

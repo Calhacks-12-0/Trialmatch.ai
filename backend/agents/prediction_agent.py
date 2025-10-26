@@ -41,8 +41,8 @@ async def startup(ctx: Context):
     AgentRegistry.register("prediction", agent.address)
 
 
-@agent.on_query(model=PredictionRequest, replies={EnrollmentForecast})
-async def handle_prediction_request(ctx: Context, sender: str, msg: PredictionRequest) -> EnrollmentForecast:
+@agent.on_message(model=PredictionRequest)
+async def handle_prediction_request(ctx: Context, sender: str, msg: PredictionRequest):
     """Generate enrollment forecast using pattern analysis"""
     logger.info(f"  → Prediction Agent forecasting for: {msg.trial_id}")
 
@@ -58,11 +58,11 @@ async def handle_prediction_request(ctx: Context, sender: str, msg: PredictionRe
         agent_state["requests_processed"] += 1
         logger.info(f"  ✓ Forecast: {forecast['predicted_enrollment']} patients in {forecast['estimated_weeks']:.1f} weeks")
 
-        return EnrollmentForecast(**forecast)
+        await ctx.send(sender, EnrollmentForecast(**forecast))
 
     except Exception as e:
         logger.error(f"Error in enrollment prediction: {e}")
-        return EnrollmentForecast(
+        await ctx.send(sender, EnrollmentForecast(
             trial_id=msg.trial_id,
             target_enrollment=msg.target_enrollment,
             predicted_enrollment=0,
@@ -73,7 +73,7 @@ async def handle_prediction_request(ctx: Context, sender: str, msg: PredictionRe
             risk_factors=[f"Error: {str(e)}"],
             recommendations=[],
             pattern_success_analysis={}
-        )
+        ))
 
 
 def generate_forecast(target: int, matches: list, patterns: list, sites: list) -> dict:
@@ -214,16 +214,16 @@ def generate_forecast(target: int, matches: list, patterns: list, sites: list) -
     }
 
 
-@agent.on_query(model=AgentStatus, replies={AgentStatus})
-async def handle_status(ctx: Context, sender: str, msg: AgentStatus) -> AgentStatus:
-    return AgentStatus(
+@agent.on_message(model=AgentStatus)
+async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
+    await ctx.send(sender, AgentStatus(
         agent_name="prediction_agent",
         status="healthy",
         address=agent.address,
         uptime=time.time() - agent_state["start_time"],
         requests_processed=agent_state["requests_processed"],
         metadata={}
-    )
+    ))
 
 
 if __name__ == "__main__":

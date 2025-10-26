@@ -1,5 +1,5 @@
 """
-Agent Bureau Runner: Runs all 7 Fetch.ai agents in a single process.
+Agent Bureau Runner: Runs all 8 Fetch.ai agents in a single process.
 
 This script starts all agents using Fetch.ai's Bureau, which manages
 multiple agents in one process. This is ideal for development and demos.
@@ -30,6 +30,7 @@ try:
     from agents.matching_agent import agent as matching
     from agents.site_agent import agent as site
     from agents.prediction_agent import agent as prediction
+    from agents.validation_agent import agent as validation
 except ImportError as e:
     logger.error(f"Failed to import agents: {e}")
     logger.error("Make sure you're running from the backend/ directory")
@@ -43,14 +44,15 @@ def main():
     logger.info("STARTING TRIALMATCH AI AGENT NETWORK")
     logger.info("=" * 70)
     logger.info("")
-    logger.info("Initializing 7-agent system:")
+    logger.info("Initializing 8-agent system:")
     logger.info("  1. Coordinator Agent (Port 8000) - Orchestrates workflow")
-    logger.info("  2. Eligibility Agent (Port 8001) - Extracts trial criteria")
+    logger.info("  2. Eligibility Agent (Port 8001) - Extracts trial criteria with codes")
     logger.info("  3. Pattern Agent (Port 8002) - Matches Conway patterns")
     logger.info("  4. Discovery Agent (Port 8003) - Finds patient candidates")
     logger.info("  5. Matching Agent (Port 8004) - Scores patients")
     logger.info("  6. Site Agent (Port 8005) - Recommends sites")
     logger.info("  7. Prediction Agent (Port 8006) - Forecasts enrollment")
+    logger.info("  8. Validation Agent (Port 8007) - Validates exclusion criteria")
     logger.info("")
     logger.info("=" * 70)
     logger.info("")
@@ -66,6 +68,7 @@ def main():
     bureau.add(matching)
     bureau.add(site)
     bureau.add(prediction)
+    bureau.add(validation)
 
     logger.info("✓ All agents registered with Bureau")
     logger.info("")

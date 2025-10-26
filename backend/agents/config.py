@@ -18,6 +18,7 @@ class AgentConfig:
     MATCHING_PORT = 8004
     SITE_PORT = 8005
     PREDICTION_PORT = 8006
+    VALIDATION_PORT = 8007
 
     # Agent seeds (deterministic addresses)
     # These seeds generate consistent addresses across restarts
@@ -28,6 +29,7 @@ class AgentConfig:
     MATCHING_SEED = "patient_matching_seed_2024"
     SITE_SEED = "site_recommendation_seed_2024"
     PREDICTION_SEED = "enrollment_prediction_seed_2024"
+    VALIDATION_SEED = "validation_exclusion_seed_2024"
 
     # Base URLs for local development
     BASE_HOST = os.getenv("AGENT_HOST", "localhost")
@@ -82,6 +84,12 @@ class AgentConfig:
                 "seed": cls.PREDICTION_SEED,
                 "port": cls.PREDICTION_PORT,
                 "endpoint": [cls.get_endpoint(cls.PREDICTION_PORT)]
+            },
+            "validation": {
+                "name": "validation_agent",
+                "seed": cls.VALIDATION_SEED,
+                "port": cls.VALIDATION_PORT,
+                "endpoint": [cls.get_endpoint(cls.VALIDATION_PORT)]
             }
         }
         return configs.get(agent_name)
@@ -96,7 +104,8 @@ class AgentConfig:
             cls.DISCOVERY_PORT,
             cls.MATCHING_PORT,
             cls.SITE_PORT,
-            cls.PREDICTION_PORT
+            cls.PREDICTION_PORT,
+            cls.VALIDATION_PORT
         ]
 
 

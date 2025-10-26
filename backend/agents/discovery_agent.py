@@ -44,8 +44,8 @@ async def startup(ctx: Context):
     agent_state["data_loader"] = ClinicalDataLoader()
 
 
-@agent.on_query(model=DiscoveryRequest, replies={DiscoveryResponse})
-async def handle_discovery_request(ctx: Context, sender: str, msg: DiscoveryRequest) -> DiscoveryResponse:
+@agent.on_message(model=DiscoveryRequest)
+async def handle_discovery_request(ctx: Context, sender: str, msg: DiscoveryRequest):
     """Discover patient candidates using Conway patterns"""
     logger.info(f"  → Discovery Agent searching patients for: {msg.trial_id}")
 
@@ -66,7 +66,7 @@ async def handle_discovery_request(ctx: Context, sender: str, msg: DiscoveryRequ
         agent_state["requests_processed"] += 1
         logger.info(f"  ✓ Discovered {len(candidates)} patient candidates from {len(patients)} total")
 
-        return DiscoveryResponse(
+        await ctx.send(sender, DiscoveryResponse(
             trial_id=msg.trial_id,
             candidates=candidates,
             total_found=len(candidates),
@@ -75,16 +75,16 @@ async def handle_discovery_request(ctx: Context, sender: str, msg: DiscoveryRequ
                 "patterns_used": len(patterns),
                 "max_results": msg.max_results
             }
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error in patient discovery: {e}")
-        return DiscoveryResponse(
+        await ctx.send(sender, DiscoveryResponse(
             trial_id=msg.trial_id,
             candidates=[],
             total_found=0,
             search_metadata={"error": str(e)}
-        )
+        ))
 
 
 def discover_candidates(patients: list, patterns: list, criteria: dict, max_results: int) -> list:
@@ -161,9 +161,9 @@ def discover_candidates(patients: list, patterns: list, criteria: dict, max_resu
     return candidates[:max_results]
 
 
-@agent.on_query(model=AgentStatus, replies={AgentStatus})
-async def handle_status(ctx: Context, sender: str, msg: AgentStatus) -> AgentStatus:
-    return AgentStatus(
+@agent.on_message(model=AgentStatus)
+async def handle_status(ctx: Context, sender: str, msg: AgentStatus):
+    await ctx.send(sender, AgentStatus(
         agent_name="discovery_agent",
         status="healthy",
         address=agent.address,
@@ -172,7 +172,7 @@ async def handle_status(ctx: Context, sender: str, msg: AgentStatus) -> AgentSta
         metadata={
             "patients_cached": len(agent_state["patient_cache"]) if agent_state["patient_cache"] else 0
         }
-    )
+    ))
 
 
 if __name__ == "__main__":
