@@ -62,7 +62,7 @@ async def match_trial(request: TrialMatchRequest):
         # Use the integration service to perform matching with patient patterns
         results = await integration_service.process_trial_matching(
             trial_id=trial_id,
-            use_synthea=False,
+            use_synthea=True,
             max_patients=1000
         )
 
@@ -211,7 +211,7 @@ async def match_trial_with_agents(request: TrialMatchRequest):
         # Run full pipeline with real data and agents
         results = await integration_service.process_trial_matching(
             trial_id=trial_id,
-            use_synthea=False,  # Use synthetic patients (can change to True if Synthea data available)
+            use_synthea=True,  # Use synthetic patients (can change to True if Synthea data available)
             max_patients=1000
         )
 

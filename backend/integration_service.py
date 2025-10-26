@@ -8,7 +8,11 @@ import requests
 import logging
 import numpy as np
 import pandas as pd
+import time
+import requests
+from agents.config import AgentRegistry 
 
+AgentRegistry.register("coordinator", "http://127.0.0.1:8000")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
