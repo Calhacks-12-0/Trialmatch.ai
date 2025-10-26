@@ -32,9 +32,9 @@ class ClinicalDataLoader:
         # Get all JSON files in the Synthea directory
         patient_files = glob.glob(os.path.join(self.synthea_data_path, '*.json'))
 
-        if not patient_files:
-            logger.warning("No Synthea patient files found, falling back to synthetic generation")
-            return self.generate_synthetic_patients(max_patients)
+        # if not patient_files:
+        #     logger.warning("No Synthea patient files found, falling back to synthetic generation")
+        #     return self.generate_synthetic_patients(max_patients)
 
         logger.info(f"Found {len(patient_files)} Synthea patient files")
 
