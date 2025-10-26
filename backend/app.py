@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 import asyncio
 from integration_service import TrialMatchIntegrationService
+from data_loader import ClinicalDataLoader
+from simple_matcher import SimplePatientMatcher
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -19,8 +21,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize integration service
+# Initialize services
 integration_service = TrialMatchIntegrationService()
+data_loader = ClinicalDataLoader()
+simple_matcher = SimplePatientMatcher()
 
 class TrialMatchRequest(BaseModel):
     trial_id: Optional[str] = None
@@ -30,9 +34,8 @@ class TrialMatchRequest(BaseModel):
 async def startup():
     """Initialize services on startup"""
     logger.info("TrialMatch AI API starting...")
-    # Pre-load data for faster demos
-    await integration_service.process_trial_matching()
-    logger.info("Initial data loaded")
+    # Skip pre-loading for faster startup (data loaded on-demand)
+    logger.info("API ready - data will be loaded on first request")
 
 @app.get("/api/health")
 async def health_check():
@@ -47,15 +50,88 @@ async def get_dashboard_metrics():
 @app.post("/api/match/trial")
 async def match_trial(request: TrialMatchRequest):
     """
-    Main endpoint: Process trial matching request
-    Flow: Data → Conway → Fetch.ai Agents → Results
+    Simple patient matching endpoint (Prototype)
+    Uses basic rule-based matching before full Conway/Fetch.ai pipeline
     """
     try:
-        logger.info(f"Processing match request for trial: {request.trial_id}")
-        results = await integration_service.process_trial_matching(request.trial_id)
+        trial_id = request.trial_id
+        if not trial_id:
+            raise HTTPException(status_code=400, detail="trial_id is required")
+
+        logger.info(f"Simple matching for trial: {trial_id}")
+
+        # Fetch trial details from ClinicalTrials.gov
+        data_loader_instance = ClinicalDataLoader()
+
+        # Try to fetch the specific trial
+        try:
+            import requests
+            response = requests.get(
+                f"https://clinicaltrials.gov/api/v2/studies/{trial_id}",
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                study_data = response.json()
+                study = study_data.get('studies', [{}])[0] if 'studies' in study_data else study_data
+
+                # Parse the trial using data_loader's parse method
+                trial_info = data_loader_instance._parse_study(study)
+            else:
+                raise HTTPException(status_code=404, detail=f"Trial {trial_id} not found")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to fetch trial: {e}")
+            raise HTTPException(status_code=500, detail="Failed to fetch trial from ClinicalTrials.gov")
+
+        # Generate synthetic patient data
+        patients_df = data_loader_instance.generate_synthetic_patients(n_patients=1000)
+        patients_data = patients_df.to_dict('records')
+
+        # Perform simple matching
+        results = simple_matcher.match_patients_to_trial(trial_info, patients_data, top_n=10)
+
+        logger.info(f"Matched {results['total_matches']} patients, returning top {len(results['matches'])}")
+
         return results
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Processing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/match/trial/agents")
+async def match_trial_with_agents(request: TrialMatchRequest):
+    """
+    Full agent pipeline with Conway pattern discovery
+    Uses real ClinicalTrials.gov data + Fetch.ai agents
+
+    Flow: Real Trial Data → Conway Pattern Discovery → 7 Fetch.ai Agents → Results
+    """
+    try:
+        trial_id = request.trial_id
+        if not trial_id:
+            raise HTTPException(status_code=400, detail="trial_id is required")
+
+        logger.info(f"Full agent pipeline for trial: {trial_id}")
+        logger.info("Pipeline: ClinicalTrials.gov → Conway → Fetch.ai Agents")
+
+        # Run full pipeline with real data and agents
+        results = await integration_service.process_trial_matching(
+            trial_id=trial_id,
+            use_synthea=False,  # Use synthetic patients (can change to True if Synthea data available)
+            max_patients=1000
+        )
+
+        logger.info(f"Agent pipeline completed in {results['processing_time']}")
+
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Agent pipeline failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/patterns")
@@ -63,26 +139,60 @@ async def get_patterns():
     """Get discovered patterns for visualization"""
     if not integration_service.conway_engine.patterns:
         await integration_service.process_trial_matching()
-    
+
+    # Get patient data for insights
+    patient_data = integration_service.data_loader.patients_df.to_dict('records') if integration_service.data_loader.patients_df is not None else None
+
     return {
         'patterns': integration_service.conway_engine.patterns[:10],
-        'insights': integration_service.conway_engine.get_pattern_insights()[:5]
+        'insights': integration_service.conway_engine.get_pattern_insights(patient_data=patient_data)[:10]
     }
 
 @app.get("/api/agents/status")
 async def get_agent_status():
-    """Get Fetch.ai agent network status"""
+    """Get Fetch.ai agent network status by checking if Bureau is running"""
+    from agents.config import AgentConfig
+    import socket
+
+    def check_port(port: int) -> bool:
+        """Check if a port is open (agent is running)"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex(('localhost', port))
+            sock.close()
+            return result == 0
+        except:
+            return False
+
+    # Check if Bureau is running on port 8001 (all agents run through Bureau)
+    bureau_active = check_port(8001)
+
+    agent_info = [
+        {'name': 'Coordinator Agent', 'port': AgentConfig.COORDINATOR_PORT},
+        {'name': 'Eligibility Agent', 'port': AgentConfig.ELIGIBILITY_PORT},
+        {'name': 'Pattern Agent', 'port': AgentConfig.PATTERN_PORT},
+        {'name': 'Discovery Agent', 'port': AgentConfig.DISCOVERY_PORT},
+        {'name': 'Matching Agent', 'port': AgentConfig.MATCHING_PORT},
+        {'name': 'Site Agent', 'port': AgentConfig.SITE_PORT},
+        {'name': 'Prediction Agent', 'port': AgentConfig.PREDICTION_PORT}
+    ]
+
+    agents_status = []
+
+    # If Bureau is active, all agents are active
+    for agent in agent_info:
+        agents_status.append({
+            'name': agent['name'],
+            'status': 'active' if bureau_active else 'offline',
+            'port': agent['port']
+        })
+
     return {
-        'agents': [
-            {'name': 'Coordinator', 'status': 'active', 'tasks': 45},
-            {'name': 'Pattern Discovery', 'status': 'active', 'tasks': 234},
-            {'name': 'Eligibility', 'status': 'active', 'tasks': 189},
-            {'name': 'Matching', 'status': 'active', 'tasks': 156},
-            {'name': 'Site Selection', 'status': 'idle', 'tasks': 98},
-            {'name': 'Prediction', 'status': 'active', 'tasks': 67}
-        ],
-        'total_messages': 789,
-        'avg_response_time': '234ms'
+        'agents': agents_status,
+        'active_count': len(agent_info) if bureau_active else 0,
+        'total_count': len(agent_info),
+        'bureau_active': bureau_active
     }
 
 if __name__ == "__main__":
