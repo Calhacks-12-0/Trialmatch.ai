@@ -43,6 +43,13 @@ import {
   Database,
   Plus,
   Loader2,
+  GitBranch,
+  CheckCircle,
+  Sparkles,
+  UserSearch,
+  TrendingUp,
+  Building2,
+  Calendar,
 } from "lucide-react";
 
 export default function App() {
@@ -1095,42 +1102,240 @@ function PatternsView() {
 
 // Agents View
 function AgentsView() {
-  const agents = [
-    { name: "Eligibility Agent", status: "Active", tasks: 234 },
-    { name: "Matching Agent", status: "Active", tasks: 189 },
-    { name: "Data Mining Agent", status: "Active", tasks: 156 },
-    {
-      name: "Site Selection Agent",
-      status: "Active",
-      tasks: 98,
+  const [agentStatuses, setAgentStatuses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Static agent metadata
+  const agentMetadata: Record<string, any> = {
+    "Coordinator Agent": {
+      description: "Orchestrates the entire multi-agent workflow",
+      role: "Workflow Orchestration",
+      icon: GitBranch,
+      color: "#6B46C1"
     },
-  ];
+    "Eligibility Agent": {
+      description: "Extracts trial eligibility criteria using structured parsing",
+      role: "Criteria Extraction",
+      icon: CheckCircle,
+      color: "#0B5394"
+    },
+    "Pattern Agent": {
+      description: "Matches Conway patterns to trial requirements",
+      role: "Pattern Matching",
+      icon: Sparkles,
+      color: "#6B46C1"
+    },
+    "Discovery Agent": {
+      description: "Searches patient database for candidates matching Conway patterns",
+      role: "Patient Discovery",
+      icon: UserSearch,
+      color: "#0B5394"
+    },
+    "Matching Agent": {
+      description: "Scores patients using Conway's similarity metrics",
+      role: "Patient Scoring",
+      icon: TrendingUp,
+      color: "#52C41A"
+    },
+    "Site Agent": {
+      description: "Recommends trial sites based on patient geography",
+      role: "Site Selection",
+      icon: Building2,
+      color: "#0B5394"
+    },
+    "Prediction Agent": {
+      description: "Forecasts enrollment timeline using pattern analysis",
+      role: "Timeline Prediction",
+      icon: Calendar,
+      color: "#6B46C1"
+    },
+  };
+
+  // Fetch agent status from backend
+  useEffect(() => {
+    const fetchAgentStatus = async () => {
+      try {
+        const response = await fetch("http://localhost:8080/api/agents/status");
+        const data = await response.json();
+
+        // Merge backend status with frontend metadata
+        const mergedAgents = data.agents.map((agent: any) => ({
+          ...agent,
+          ...agentMetadata[agent.name]
+        }));
+
+        setAgentStatuses(mergedAgents);
+      } catch (error) {
+        console.error("Failed to fetch agent status:", error);
+        // Fallback to offline status for all agents
+        setAgentStatuses(
+          Object.keys(agentMetadata).map(name => ({
+            name,
+            status: "offline",
+            port: 0,
+            ...agentMetadata[name]
+          }))
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAgentStatus();
+
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchAgentStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const agents = agentStatuses;
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>AI Agent Control Center</CardTitle>
+          <CardTitle>Fetch.ai Agent Network</CardTitle>
+          <p className="text-sm text-gray-500 mt-2">
+            7 specialized agents working together with Conway Pattern Discovery
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {agents.map((agent) => (
-              <div
-                key={agent.name}
-                className="p-4 bg-gradient-to-br from-[#6B46C1]/10 to-transparent rounded-lg border border-[#6B46C1]/20"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-[#52C41A]" />
-                  <span className="text-xs text-gray-500">
-                    {agent.status}
-                  </span>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-[#6B46C1]" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {agents.map((agent) => {
+                const IconComponent = agent.icon;
+                const isActive = agent.status === 'active';
+                return (
+                  <div
+                    key={agent.name}
+                    className="p-4 bg-gradient-to-br from-[#6B46C1]/5 to-transparent rounded-lg border border-[#6B46C1]/20 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div
+                        className="p-2 rounded-lg flex-shrink-0"
+                        style={{ backgroundColor: `${agent.color}15` }}
+                      >
+                        <IconComponent
+                          className="w-5 h-5"
+                          style={{ color: agent.color }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <div
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              isActive
+                                ? 'bg-[#52C41A] animate-pulse'
+                                : 'bg-gray-400'
+                            }`}
+                          />
+                          <span className={`text-xs font-medium ${
+                            isActive ? 'text-[#52C41A]' : 'text-gray-500'
+                          }`}>
+                            {isActive ? 'Active' : 'Offline'}
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-sm truncate">{agent.name}</h3>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-[#6B46C1] bg-purple-50 px-2 py-1 rounded inline-block">
+                        {agent.role}
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">
+                        {agent.description}
+                      </p>
+                      {agent.port && (
+                        <p className="text-xs text-gray-400">
+                          Port: {agent.port}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Agent Workflow Pipeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent Workflow Pipeline</CardTitle>
+          <p className="text-sm text-gray-500 mt-2">
+            How the agent network processes clinical trial matching requests
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Main Pipeline Flow */}
+            <div className="flex flex-col md:flex-row items-center justify-center gap-3 p-6 bg-gradient-to-r from-purple-50 via-blue-50 to-green-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#6B46C1]">
+                    <Search className="w-7 h-7 text-[#6B46C1]" />
+                  </div>
+                  <span className="text-xs font-medium mt-2">Trial Query</span>
                 </div>
-                <h3 className="mb-1">{agent.name}</h3>
-                <p className="text-sm text-gray-500">
-                  {agent.tasks} tasks completed
-                </p>
+                <span className="text-2xl text-gray-400 hidden md:block">→</span>
               </div>
-            ))}
+
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#0B5394]">
+                    <Sparkles className="w-7 h-7 text-[#0B5394]" />
+                  </div>
+                  <span className="text-xs font-medium mt-2">Conway Engine</span>
+                </div>
+                <span className="text-2xl text-gray-400 hidden md:block">→</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#6B46C1]">
+                    <GitBranch className="w-7 h-7 text-[#6B46C1]" />
+                  </div>
+                  <span className="text-xs font-medium mt-2">Agent Network</span>
+                </div>
+                <span className="text-2xl text-gray-400 hidden md:block">→</span>
+              </div>
+
+              <div className="flex flex-col items-center">
+                <div className="w-14 h-14 rounded-lg bg-white shadow-sm flex items-center justify-center border-2 border-[#52C41A]">
+                  <Users className="w-7 h-7 text-[#52C41A]" />
+                </div>
+                <span className="text-xs font-medium mt-2">Patient Matches</span>
+              </div>
+            </div>
+
+            {/* Agent Execution Order */}
+            <div className="pt-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-4">Sequential Agent Execution:</h4>
+              <div className="space-y-3">
+                {agents.slice(1).map((agent, idx) => {
+                  const IconComponent = agent.icon;
+                  return (
+                    <div key={agent.name} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#6B46C1] text-white text-sm font-bold flex-shrink-0">
+                        {idx + 1}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <IconComponent className="w-4 h-4" style={{ color: agent.color }} />
+                        <span className="font-medium text-sm">{agent.name}</span>
+                      </div>
+                      <div className="hidden md:block text-xs text-gray-500 ml-auto">
+                        {agent.role}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
