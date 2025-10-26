@@ -43,10 +43,19 @@ Thumbs.db
 *.log
 logs/
 
-# Data files (large datasets)
+# Data files (large datasets - ~21GB Synthea FHIR data)
 backend/data/*.csv
 backend/data/*.json
+backend/data/*.zip
+backend/data/*.jar
+backend/data/fhir/
+backend/data/output/
+backend/*.zip
 !backend/data/README.md
+
+# Synthea generated data (large)
+**/output/fhir/
+**/fhir/*.json
 
 # Model files
 *.pkl
