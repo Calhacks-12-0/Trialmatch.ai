@@ -7,6 +7,7 @@ from conway_engine import ConwayPatternEngine
 import requests
 import logging
 import numpy as np
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,24 +43,56 @@ class TrialMatchIntegrationService:
         self.agent_url = "http://localhost:8000"
         self.processing_stats = {}
         
-    async def process_trial_matching(self, trial_id: str = None) -> Dict:
+    async def process_trial_matching(self, trial_id: str = None, use_synthea: bool = False, max_patients: int = 1000) -> Dict:
         """
         Main pipeline: Load data → Discover patterns → Send to agents
+
+        Args:
+            trial_id: Specific trial NCT ID to fetch from ClinicalTrials.gov
+            use_synthea: Whether to use Synthea FHIR data (default: False, uses synthetic)
+            max_patients: Maximum number of patients to load
         """
         start_time = datetime.now()
-        
+
         # Step 1: Load and prepare data
         logger.info("Step 1: Loading clinical data...")
-        data = self.data_loader.prepare_for_conway()
-        
+
+        # Fetch specific trial from ClinicalTrials.gov if provided
+        if trial_id:
+            logger.info(f"Fetching trial {trial_id} from ClinicalTrials.gov...")
+            try:
+                response = requests.get(
+                    f"https://clinicaltrials.gov/api/v2/studies/{trial_id}",
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    study_data = response.json()
+                    study = study_data.get('studies', [{}])[0] if 'studies' in study_data else study_data
+                    trial = self.data_loader._parse_study(study)
+                    # Store single trial
+                    self.data_loader.trials_df = pd.DataFrame([trial])
+                else:
+                    logger.warning(f"Trial {trial_id} not found, using default trials")
+                    self.data_loader.fetch_clinical_trials(max_trials=50)
+            except Exception as e:
+                logger.error(f"Failed to fetch trial: {e}, falling back to default")
+                self.data_loader.fetch_clinical_trials(max_trials=50)
+        else:
+            # Fetch multiple recruiting trials
+            logger.info("Fetching recruiting trials from ClinicalTrials.gov...")
+            self.data_loader.fetch_clinical_trials(max_trials=50)
+
+        # Load patient data (Synthea or synthetic)
+        data = self.data_loader.prepare_for_conway(use_synthea=use_synthea, max_patients=max_patients)
+
         # Step 2: Conway pattern discovery (unsupervised)
         logger.info("Step 2: Running Conway pattern discovery...")
         embeddings = self.conway_engine.create_universal_embedding(data)
         pattern_results = self.conway_engine.discover_patterns(embeddings)
-        
+
         # Step 3: Get pattern insights
         insights = self.conway_engine.get_pattern_insights()
-        
+
         # Step 4: Match patterns to specific trial
         if trial_id:
             trials = data['trials']
