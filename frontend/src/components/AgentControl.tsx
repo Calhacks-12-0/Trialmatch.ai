@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
-import { Pause, Play, MessageCircle } from "lucide-react";
+import { Pause, Play, MessageCircle, ArrowRight, Search, Sparkles, Users, Activity, CheckCircle, MapPin, TrendingUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,14 +14,25 @@ import {
 import AgentChat from "./AgentChat";
 
 const agents = [
-  { id: 1, name: "Discovery Agent", key: "discovery", status: "Processing", x: 50, y: 20 },
-  { id: 2, name: "Matching Agent", key: "matching", status: "Complete", x: 20, y: 50 },
-  { id: 3, name: "Pattern Agent", key: "pattern", status: "Processing", x: 80, y: 50 },
-  { id: 4, name: "Site Agent", key: "site", status: "Processing", x: 35, y: 80 },
-  { id: 5, name: "Prediction Agent", key: "prediction", status: "Complete", x: 65, y: 80 },
-  { id: 6, name: "Eligibility Agent", key: "eligibility", status: "Processing", x: 15, y: 20 },
-  { id: 7, name: "Validation Agent", key: "validation", status: "Complete", x: 85, y: 20 },
-  { id: 8, name: "Coordinator", key: "coordinator", status: "Processing", x: 50, y: 50, isCenter: true },
+  { id: 1, name: "Eligibility Agent", key: "eligibility", status: "Processing", x: 15, y: 20, port: 8001 },
+  { id: 2, name: "Pattern Agent", key: "pattern", status: "Complete", x: 80, y: 20, port: 8002 },
+  { id: 3, name: "Discovery Agent", key: "discovery", status: "Processing", x: 50, y: 20, port: 8003 },
+  { id: 4, name: "Matching Agent", key: "matching", status: "Complete", x: 20, y: 50, port: 8004 },
+  { id: 5, name: "Site Agent", key: "site", status: "Processing", x: 35, y: 80, port: 8005 },
+  { id: 6, name: "Prediction Agent", key: "prediction", status: "Complete", x: 65, y: 80, port: 8006 },
+  { id: 7, name: "Validation Agent", key: "validation", status: "Complete", x: 80, y: 50, port: 8007 },
+  { id: 8, name: "Coordinator", key: "coordinator", status: "Processing", x: 50, y: 50, isCenter: true, port: 8000 },
+];
+
+// Workflow pipeline agents in sequential order
+const workflowAgents = [
+  { name: "Eligibility Agent", key: "eligibility", description: "Criteria Extraction", icon: Search, color: "#0B5394" },
+  { name: "Pattern Agent", key: "pattern", description: "Pattern Matching", icon: Sparkles, color: "#6B46C1" },
+  { name: "Discovery Agent", key: "discovery", description: "Patient Discovery", icon: Users, color: "#52C41A" },
+  { name: "Matching Agent", key: "matching", description: "Patient Scoring", icon: Activity, color: "#0B5394" },
+  { name: "Validation Agent", key: "validation", description: "Exclusion Check", icon: CheckCircle, color: "#6B46C1" },
+  { name: "Site Agent", key: "site", description: "Site Selection", icon: MapPin, color: "#52C41A" },
+  { name: "Prediction Agent", key: "prediction", description: "Timeline Prediction", icon: TrendingUp, color: "#0B5394" },
 ];
 
 const recentQueries = [
@@ -33,13 +44,19 @@ const recentQueries = [
 ];
 
 const activityMessages = [
-  { agent: "Coordinator", message: "Initiating patient screening workflow", color: "#0B5394" },
-  { agent: "Screening Agent", message: "Processing 1,247 patient records", color: "#52C41A" },
-  { agent: "Matching Agent", message: "Found 89 potential matches for NCT2024001", color: "#6B46C1" },
-  { agent: "Analytics Agent", message: "Calculating success probability scores", color: "#0B5394" },
-  { agent: "Compliance Agent", message: "Verifying eligibility criteria compliance", color: "#52C41A" },
-  { agent: "Reporting Agent", message: "Generating match summary report", color: "#6B46C1" },
-  { agent: "Coordinator", message: "Workflow completed successfully", color: "#0B5394" },
+  { agent: "Coordinator", message: "Initiating patient matching workflow for NCT04567890", color: "#0B5394" },
+  { agent: "Eligibility Agent", message: "Extracting trial criteria from ClinicalTrials.gov", color: "#0B5394" },
+  { agent: "Pattern Agent", message: "Matching patterns to trial criteria using UMAP", color: "#6B46C1" },
+  { agent: "Discovery Agent", message: "Searching 1,000 FHIR patient records", color: "#52C41A" },
+  { agent: "Discovery Agent", message: "Found 87 candidate patients in Pattern #42", color: "#52C41A" },
+  { agent: "Matching Agent", message: "Scoring 87 patients using similarity metrics", color: "#0B5394" },
+  { agent: "Validation Agent", message: "Validating patients against exclusion criteria", color: "#6B46C1" },
+  { agent: "Validation Agent", message: "86 patients validated, 1 excluded (kidney disease)", color: "#6B46C1" },
+  { agent: "Site Agent", message: "Analyzing feasibility for 10 trial sites", color: "#52C41A" },
+  { agent: "Site Agent", message: "Top sites: UCLA (87%), Stanford (81%), UCSF (79%)", color: "#52C41A" },
+  { agent: "Prediction Agent", message: "Forecasting enrollment timeline", color: "#0B5394" },
+  { agent: "Prediction Agent", message: "Predicted completion: March 15, 2025", color: "#0B5394" },
+  { agent: "Coordinator", message: "Workflow completed: 86 matches, 3 sites, 2.3s", color: "#0B5394" },
 ];
 
 export default function AgentControl() {
@@ -74,6 +91,84 @@ export default function AgentControl() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Agent Workflow Pipeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent Workflow Pipeline</CardTitle>
+          <p className="text-gray-500 text-sm">How the agent network processes clinical trial matching requests</p>
+        </CardHeader>
+        <CardContent>
+          <div className="relative overflow-x-auto">
+            {/* Trial Query Start */}
+            <div className="flex items-center gap-3 mb-8 min-w-max">
+              <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white flex items-center justify-center shadow-lg">
+                <div className="text-center">
+                  <Search className="w-6 h-6 mx-auto mb-1" />
+                  <p className="text-[10px] font-semibold">Trial Query</p>
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+
+              {/* Workflow Agents in Horizontal Layout */}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {workflowAgents.map((agent, index) => {
+                  const Icon = agent.icon;
+                  return (
+                    <React.Fragment key={agent.key}>
+                      <div className="flex-shrink-0">
+                        <div
+                          className="w-20 h-20 rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer flex flex-col items-center justify-center text-white relative overflow-hidden group"
+                          style={{ backgroundColor: agent.color }}
+                        >
+                          <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                          <Icon className="w-5 h-5 mb-1" />
+                          <p className="text-[10px] font-semibold text-center px-1 leading-tight">{agent.name.replace(" Agent", "")}</p>
+                          <div className="absolute top-1 right-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
+                          </div>
+                        </div>
+                      </div>
+                      {index < workflowAgents.length - 1 && (
+                        <ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              <ArrowRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+
+              {/* Patient Matches Result */}
+              <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-green-500 to-green-600 text-white flex items-center justify-center shadow-lg">
+                <div className="text-center">
+                  <Users className="w-6 h-6 mx-auto mb-1" />
+                  <p className="text-[10px] font-semibold">Matches</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sequential Agent Execution */}
+            <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-green-50 rounded-lg p-4">
+              <h4 className="text-sm font-semibold mb-3 text-gray-700">Sequential Agent Execution:</h4>
+              <div className="space-y-2">
+                {workflowAgents.map((agent, index) => (
+                  <div key={agent.key} className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2" style={{ borderColor: agent.color }}>
+                      <span className="text-xs font-bold" style={{ color: agent.color }}>{index + 1}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {React.createElement(agent.icon, { className: "w-4 h-4", style: { color: agent.color } })}
+                      <span className="font-medium" style={{ color: agent.color }}>{agent.name}</span>
+                    </div>
+                    <span className="text-gray-600 text-xs">{agent.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Hexagon Flow Diagram */}
       <Card>
         <CardHeader>

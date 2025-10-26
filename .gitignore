@@ -64,3 +64,7 @@ coverage/
 *.tmp
 *.bak
 *.backup
+
+# Agent process IDs
+.agent_pids/
+*.pid

@@ -139,12 +139,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* Custom Modal - Simple and working */}
+      {/* Enhanced Add Trial Modal */}
       {dialogOpen && (
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/50 z-50"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity"
             onClick={() => {
               setDialogOpen(false);
               setTrialId("");
@@ -154,51 +154,135 @@ export default function App() {
           {/* Modal Content */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold mb-2">Add Clinical Trial</h2>
-                <p className="text-sm text-gray-500">
-                  Enter a clinical trial ID (NCT number) to match patients
-                </p>
+              {/* Header with gradient */}
+              <div className="bg-gradient-to-r from-[#0B5394] to-[#1E6BB8] p-6 text-white">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                    <Plus className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Add Clinical Trial</h2>
+                    <p className="text-sm text-blue-100">Match patients to a new trial</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Input */}
-              <div className="mb-6">
-                <Input
-                  placeholder="e.g., NCT05706298"
-                  value={trialId}
-                  onChange={(e) => setTrialId(e.target.value)}
-                  className="w-full"
-                  autoFocus
-                />
+              {/* Content */}
+              <div className="p-6 space-y-5">
+                {/* Instructions */}
+                <div className="bg-blue-50 border-l-4 border-[#0B5394] p-4 rounded-r-lg">
+                  <div className="flex gap-3">
+                    <Search className="w-5 h-5 text-[#0B5394] flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 mb-1">
+                        How it works:
+                      </p>
+                      <ol className="text-xs text-gray-600 space-y-1">
+                        <li>1. Enter an NCT number from ClinicalTrials.gov</li>
+                        <li>2. Our AI agents will analyze eligibility criteria</li>
+                        <li>3. Pattern Discovery finds matching patients</li>
+                        <li>4. View results in the Matches tab</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Input with label */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Clinical Trial ID (NCT Number)
+                  </label>
+                  <div className="relative">
+                    <Input
+                      placeholder="e.g., NCT05706298"
+                      value={trialId}
+                      onChange={(e) => setTrialId(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && trialId && !isLoading) {
+                          handleAddTrial();
+                        }
+                      }}
+                      className="w-full pl-10 pr-4 py-3 text-base border-2 focus:border-[#0B5394] focus:ring-2 focus:ring-[#0B5394]/20 rounded-lg transition-all"
+                      autoFocus
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Find trials at{" "}
+                    <a
+                      href="https://clinicaltrials.gov"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0B5394] hover:underline font-medium"
+                    >
+                      ClinicalTrials.gov
+                    </a>
+                  </p>
+                </div>
+
+                {/* Example trials */}
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-2">Try these examples:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {["NCT05706298", "NCT04567890", "NCT03829228"].map((example) => (
+                      <button
+                        key={example}
+                        onClick={() => setTrialId(example)}
+                        className="px-3 py-1.5 text-xs font-medium text-[#0B5394] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors"
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Progress indicator when loading */}
+                {isLoading && (
+                  <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-r-lg">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-5 h-5 text-purple-600 animate-spin flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-purple-900">Processing...</p>
+                        <p className="text-xs text-purple-700 mt-1">
+                          AI agents are analyzing trial criteria and matching patients
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
-              <div className="flex justify-end gap-3">
+              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
                 <Button
                   variant="outline"
                   onClick={() => {
                     setDialogOpen(false);
                     setTrialId("");
                   }}
+                  disabled={isLoading}
+                  className="px-5 py-2"
                 >
                   Cancel
                 </Button>
                 <Button
-                  className="bg-[#52C41A] hover:bg-[#52C41A]/90 text-white"
+                  className="bg-[#52C41A] hover:bg-[#45a816] text-white px-6 py-2 font-medium shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleAddTrial}
                   disabled={!trialId || isLoading}
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Matching...
+                      Matching Patients...
                     </>
                   ) : (
-                    "Match Patients"
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Match Patients
+                    </>
                   )}
                 </Button>
               </div>
